@@ -1,9 +1,6 @@
 use bevy::prelude::*;
 
-#[cfg(feature = "debug")]
-use bevy_inspector_egui::bevy_egui::EguiPlugin;
-#[cfg(feature = "debug")]
-use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use board_plugin::BoardPlugin;
 
 fn main() {
     let mut app = App::new();
@@ -16,9 +13,18 @@ fn main() {
         }),
         ..Default::default()
     }));
-    #[cfg(feature = "debug")]
+    app.add_plugins(BoardPlugin);
     // Debug hierarchy inspector
-    app.add_plugins((EguiPlugin::default(), WorldInspectorPlugin::new()));
+    #[cfg(feature = "debug")]
+    {
+        use bevy_inspector_egui::bevy_egui::EguiPlugin;
+        use bevy_inspector_egui::quick::WorldInspectorPlugin;
+
+        use board_plugin::components::Coordinates;
+
+        app.add_plugins((EguiPlugin::default(), WorldInspectorPlugin::new()));
+        app.register_type::<Coordinates>();
+    }
     // Startup system (cameras)
     app.add_systems(Startup, camera_setup);
     // Run the app
