@@ -1,5 +1,7 @@
+mod bounds;
 pub mod components;
 pub mod resources;
+mod systems;
 
 use bevy::{
     color::palettes::css::{GRAY, GREEN, ORANGE, PURPLE, YELLOW},
@@ -8,14 +10,16 @@ use bevy::{
     prelude::*,
     window::PrimaryWindow,
 };
+use bounds::Bounds2;
 use components::{Bomb, BombNeighbor, Coordinates, Uncover};
-use resources::{BoardOptions, BoardPosition, TileSize, tile::Tile, tile_map::TileMap};
+use resources::{Board, BoardOptions, BoardPosition, TileSize, tile::Tile, tile_map::TileMap};
 
 pub struct BoardPlugin;
 
 impl Plugin for BoardPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, Self::create_board);
+        app.add_systems(Update, systems::input::input_handling);
         log::info!("Loaded Board Plugin");
         #[cfg(feature = "debug")]
         {
@@ -101,6 +105,15 @@ impl BoardPlugin {
                     font,
                 );
             });
+
+        commands.insert_resource(Board {
+            tile_map,
+            bounds: Bounds2 {
+                position: board_position.xy(),
+                size: board_size,
+            },
+            tile_size,
+        });
     }
 
     /// Computes a tile size that matches the window according to the tile map size
