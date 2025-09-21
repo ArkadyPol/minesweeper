@@ -1,5 +1,4 @@
 use bevy::prelude::*;
-
 use board_plugin::BoardPlugin;
 use board_plugin::resources::BoardOptions;
 
