@@ -90,6 +90,7 @@ impl BoardPlugin {
 
         let mut covered_tiles =
             HashMap::with_capacity((tile_map.width() * tile_map.height()).into());
+        let mut safe_start = None;
 
         commands
             .spawn((
@@ -119,8 +120,15 @@ impl BoardPlugin {
                     font,
                     Color::from(DARK_GRAY),
                     &mut covered_tiles,
+                    &mut safe_start,
                 );
             });
+
+        if options.safe_start {
+            if let Some(entity) = safe_start {
+                commands.entity(entity).insert(Uncover);
+            }
+        }
 
         commands.insert_resource(Board {
             tile_map,
@@ -181,6 +189,7 @@ impl BoardPlugin {
         font: Handle<Font>,
         covered_tile_color: Color,
         covered_tiles: &mut HashMap<Coordinates, Entity>,
+        safe_start_entity: &mut Option<Entity>,
     ) {
         // Tiles
         for (y, line) in tile_map.iter().enumerate() {
@@ -219,6 +228,9 @@ impl BoardPlugin {
                         ))
                         .id();
                     covered_tiles.insert(coordinates, entity);
+                    if safe_start_entity.is_none() && *tile == Tile::Empty {
+                        *safe_start_entity = Some(entity);
+                    }
                 });
 
                 match tile {
