@@ -1,19 +1,23 @@
+use bevy::color::palettes::css::{DARK_GRAY, GRAY};
 use bevy::{log, prelude::*};
 use board_plugin::BoardPlugin;
-use board_plugin::resources::BoardOptions;
+use board_plugin::resources::{BoardAssets, BoardOptions, SpriteMaterial};
 
 use events::CreateGameEvent;
 
 mod events;
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, States)]
+#[derive(Debug, Clone, Default, Eq, PartialEq, Hash, States)]
 pub enum AppState {
-    InGame { paused: bool },
+    InGame {
+        paused: bool,
+    },
+    #[default]
     Out,
 }
 
-impl Default for AppState {
-    fn default() -> Self {
+impl AppState {
+    fn start_game() -> Self {
         Self::InGame { paused: false }
     }
 }
@@ -43,19 +47,11 @@ fn main() {
         }),
         ..Default::default()
     }));
-    // Board plugin options
-    app.insert_resource(BoardOptions {
-        map_size: (20, 20),
-        bomb_count: 40,
-        tile_padding: 3.0,
-        safe_start: true,
-        ..Default::default()
-    });
     app.init_state::<AppState>();
     app.add_computed_state::<InGame>();
     app.add_plugins(BoardPlugin {
         running_state: InGame,
-        not_pause: AppState::default(),
+        not_pause: AppState::start_game(),
     });
     // Debug hierarchy inspector
     #[cfg(feature = "debug")]
@@ -65,8 +61,8 @@ fn main() {
 
         app.add_plugins((EguiPlugin::default(), WorldInspectorPlugin::new()));
     }
-    // Startup system (cameras)
-    app.add_systems(Startup, camera_setup);
+    // Startup system (cameras) & board
+    app.add_systems(Startup, (camera_setup, setup_board));
     // State handling
     app.add_systems(Update, (handle_create_game_event, state_handler).chain());
 
@@ -97,7 +93,7 @@ fn state_handler(
         log::debug!("loading detected");
         if state.get() == &AppState::Out {
             log::info!("loading game");
-            next_state.set(AppState::default());
+            next_state.set(AppState::start_game());
         }
         if let AppState::InGame { .. } = state.get() {
             log::info!("reloading game");
@@ -126,6 +122,49 @@ fn handle_create_game_event(
 ) {
     for _ev in reader.read() {
         log::info!("loading game from event");
-        next_state.set(AppState::default());
+        next_state.set(AppState::start_game());
     }
+}
+
+fn setup_board(
+    mut commands: Commands,
+    mut next_state: ResMut<NextState<AppState>>,
+    asset_server: Res<AssetServer>,
+) {
+    // Board plugin options
+    commands.insert_resource(BoardOptions {
+        map_size: (20, 20),
+        bomb_count: 40,
+        tile_padding: 1.,
+        safe_start: true,
+        ..Default::default()
+    });
+    // Board assets
+    commands.insert_resource(BoardAssets {
+        label: "Default".to_string(),
+        board_material: SpriteMaterial {
+            color: Color::WHITE,
+            ..Default::default()
+        },
+        tile_material: SpriteMaterial {
+            color: Color::from(DARK_GRAY),
+            ..Default::default()
+        },
+        covered_tile_material: SpriteMaterial {
+            color: Color::from(GRAY),
+            ..Default::default()
+        },
+        bomb_counter_font: asset_server.load("fonts/pixeled.ttf"),
+        bomb_counter_colors: BoardAssets::default_colors(),
+        flag_material: SpriteMaterial {
+            texture: asset_server.load("sprites/flag.png"),
+            color: Color::WHITE,
+        },
+        bomb_material: SpriteMaterial {
+            texture: asset_server.load("sprites/bomb.png"),
+            color: Color::WHITE,
+        },
+    });
+    // Plugin activation
+    next_state.set(AppState::start_game());
 }

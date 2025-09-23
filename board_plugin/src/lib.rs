@@ -5,17 +5,15 @@ pub mod resources;
 mod systems;
 
 use bevy::{
-    color::palettes::css::{DARK_GRAY, GRAY, GREEN, ORANGE, PURPLE, YELLOW},
-    ecs::relationship::RelatedSpawnerCommands,
-    log,
-    platform::collections::HashMap,
-    prelude::*,
+    ecs::relationship::RelatedSpawnerCommands, log, platform::collections::HashMap, prelude::*,
     window::PrimaryWindow,
 };
 use bounds::Bounds2;
 use components::{Bomb, BombNeighbor, Coordinates, Uncover};
 use events::TileTriggerEvent;
-use resources::{Board, BoardOptions, BoardPosition, TileSize, tile::Tile, tile_map::TileMap};
+use resources::{
+    Board, BoardAssets, BoardOptions, BoardPosition, TileSize, tile::Tile, tile_map::TileMap,
+};
 
 pub struct BoardPlugin<T, U> {
     pub running_state: T,
@@ -60,11 +58,8 @@ impl<T, U> BoardPlugin<T, U> {
         mut commands: Commands,
         board_options: Option<Res<BoardOptions>>,
         window: Query<&Window, With<PrimaryWindow>>,
-        asset_server: Res<AssetServer>,
+        board_assets: Res<BoardAssets>,
     ) {
-        let font: Handle<Font> = asset_server.load("fonts/pixeled.ttf");
-        let bomb_image: Handle<Image> = asset_server.load("sprites/bomb.png");
-
         let options = match board_options {
             None => BoardOptions::default(), // If no options is set we use the default one
             Some(o) => o.clone(),
@@ -114,8 +109,9 @@ impl<T, U> BoardPlugin<T, U> {
                 parent.spawn((
                     Name::new("Background"),
                     Sprite {
-                        color: Color::WHITE,
+                        color: board_assets.board_material.color,
                         custom_size: Some(board_size),
+                        image: board_assets.board_material.texture.clone(),
                         ..Default::default()
                     },
                     Transform::from_xyz(board_size.x / 2., board_size.y / 2., 0.),
@@ -126,10 +122,7 @@ impl<T, U> BoardPlugin<T, U> {
                     &tile_map,
                     tile_size,
                     options.tile_padding,
-                    Color::from(GRAY),
-                    bomb_image,
-                    font,
-                    Color::from(DARK_GRAY),
+                    &board_assets,
                     &mut covered_tiles,
                     &mut safe_start,
                 );
@@ -167,23 +160,14 @@ impl<T, U> BoardPlugin<T, U> {
     }
 
     /// Generates the bomb counter text 2D Bundle for a given value
-    fn bomb_count_text_bundle(count: u8, font: Handle<Font>, size: f32) -> impl Bundle {
+    fn bomb_count_text_bundle(count: u8, board_assets: &BoardAssets, size: f32) -> impl Bundle {
         // We retrieve the text and the correct color
-        let (text, color) = (
-            count.to_string(),
-            match count {
-                1 => Color::WHITE,
-                2 => Color::from(GREEN),
-                3 => Color::from(YELLOW),
-                4 => Color::from(ORANGE),
-                _ => Color::from(PURPLE),
-            },
-        );
+        let color = board_assets.bomb_counter_color(count);
         // We generate a text bundle
         (
-            Text2d::new(text),
+            Text2d::new(count.to_string()),
             TextFont {
-                font,
+                font: board_assets.bomb_counter_font.clone(),
                 font_size: size,
                 ..Default::default()
             },
@@ -197,10 +181,7 @@ impl<T, U> BoardPlugin<T, U> {
         tile_map: &TileMap,
         size: f32,
         padding: f32,
-        color: Color,
-        bomb_image: Handle<Image>,
-        font: Handle<Font>,
-        covered_tile_color: Color,
+        board_assets: &BoardAssets,
         covered_tiles: &mut HashMap<Coordinates, Entity>,
         safe_start_entity: &mut Option<Entity>,
     ) {
@@ -215,8 +196,9 @@ impl<T, U> BoardPlugin<T, U> {
                 let mut cmd = parent.spawn((
                     Name::new(format!("Tile ({}, {})", x, y)),
                     Sprite {
-                        color,
+                        color: board_assets.tile_material.color,
                         custom_size: Some(Vec2::splat(size - padding as f32)),
+                        image: board_assets.tile_material.texture.clone(),
                         ..Default::default()
                     },
                     Transform::from_xyz(
@@ -234,7 +216,8 @@ impl<T, U> BoardPlugin<T, U> {
                             Name::new("Tile Cover"),
                             Sprite {
                                 custom_size: Some(Vec2::splat(size - padding)),
-                                color: covered_tile_color,
+                                color: board_assets.covered_tile_material.color,
+                                image: board_assets.covered_tile_material.texture.clone(),
                                 ..Default::default()
                             },
                             Transform::from_xyz(0., 0., 2.),
@@ -253,7 +236,8 @@ impl<T, U> BoardPlugin<T, U> {
                         cmd.with_children(|parent| {
                             parent.spawn((
                                 Sprite {
-                                    image: bomb_image.clone(),
+                                    color: board_assets.bomb_material.color,
+                                    image: board_assets.bomb_material.texture.clone(),
                                     custom_size: Some(Vec2::splat(size - padding)),
                                     ..Default::default()
                                 },
@@ -267,7 +251,7 @@ impl<T, U> BoardPlugin<T, U> {
                         cmd.with_children(|parent| {
                             parent.spawn(Self::bomb_count_text_bundle(
                                 *v,
-                                font.clone(),
+                                board_assets,
                                 (size - padding) * 0.5,
                             ));
                         });
