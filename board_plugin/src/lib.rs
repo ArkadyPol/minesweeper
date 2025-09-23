@@ -10,7 +10,7 @@ use bevy::{
 };
 use bounds::Bounds2;
 use components::{Bomb, BombNeighbor, Coordinates, Uncover};
-use events::TileTriggerEvent;
+use events::{BoardCompletedEvent, BombExplosionEvent, TileMarkEvent, TileTriggerEvent};
 use resources::{
     Board, BoardAssets, BoardOptions, BoardPosition, TileSize, tile::Tile, tile_map::TileMap,
 };
@@ -36,10 +36,14 @@ impl<T: ComputedStates, U: States> Plugin for BoardPlugin<T, U> {
             // We handle uncovering even if the state is inactive
             .add_systems(
                 Update,
-                systems::uncover::uncover_tiles.run_if(in_state(self.running_state.clone())),
+                (systems::uncover::uncover_tiles, systems::mark::mark_tiles)
+                    .run_if(in_state(self.running_state.clone())),
             )
             .add_systems(OnExit(self.running_state.clone()), Self::cleanup_board);
         app.add_event::<TileTriggerEvent>();
+        app.add_event::<BoardCompletedEvent>();
+        app.add_event::<BombExplosionEvent>();
+        app.add_event::<TileMarkEvent>();
         log::info!("Loaded Board Plugin");
         #[cfg(feature = "debug")]
         {
@@ -144,6 +148,7 @@ impl<T, U> BoardPlugin<T, U> {
             tile_size,
             covered_tiles,
             entity: board_entity,
+            marked_tiles: Vec::new(),
         });
     }
 
