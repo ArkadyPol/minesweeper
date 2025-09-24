@@ -42,7 +42,7 @@ fn main() {
     app.add_plugins(DefaultPlugins.set(WindowPlugin {
         primary_window: Some(Window {
             title: "Mine Sweeper!".to_string(),
-            resolution: (700., 800.).into(),
+            resolution: (700, 800).into(),
             ..Default::default()
         }),
         ..Default::default()
@@ -66,7 +66,7 @@ fn main() {
     // State handling
     app.add_systems(Update, (handle_create_game_event, state_handler).chain());
 
-    app.add_event::<CreateGameEvent>();
+    app.add_message::<CreateGameEvent>();
     // Run the app
     app.run();
 }
@@ -79,7 +79,7 @@ fn camera_setup(mut commands: Commands) {
 fn state_handler(
     state: Res<State<AppState>>,
     mut next_state: ResMut<NextState<AppState>>,
-    mut events: EventWriter<CreateGameEvent>,
+    mut events: MessageWriter<CreateGameEvent>,
     keys: Res<ButtonInput<KeyCode>>,
 ) {
     if keys.just_pressed(KeyCode::KeyC) {
@@ -117,7 +117,7 @@ fn state_handler(
 }
 
 fn handle_create_game_event(
-    mut reader: EventReader<CreateGameEvent>,
+    mut reader: MessageReader<CreateGameEvent>,
     mut next_state: ResMut<NextState<AppState>>,
 ) {
     for _ev in reader.read() {

@@ -5,7 +5,7 @@ pub fn mark_tiles(
     mut commands: Commands,
     mut board: ResMut<Board>,
     board_assets: Res<BoardAssets>,
-    mut tile_mark_event_rdr: EventReader<TileMarkEvent>,
+    mut tile_mark_event_rdr: MessageReader<TileMarkEvent>,
     query: Query<&Children>,
 ) {
     for event in tile_mark_event_rdr.read() {

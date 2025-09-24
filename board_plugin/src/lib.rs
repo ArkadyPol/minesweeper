@@ -40,10 +40,10 @@ impl<T: ComputedStates, U: States> Plugin for BoardPlugin<T, U> {
                     .run_if(in_state(self.running_state.clone())),
             )
             .add_systems(OnExit(self.running_state.clone()), Self::cleanup_board);
-        app.add_event::<TileTriggerEvent>();
-        app.add_event::<BoardCompletedEvent>();
-        app.add_event::<BombExplosionEvent>();
-        app.add_event::<TileMarkEvent>();
+        app.add_message::<TileTriggerEvent>();
+        app.add_message::<BoardCompletedEvent>();
+        app.add_message::<BombExplosionEvent>();
+        app.add_message::<TileMarkEvent>();
         log::info!("Loaded Board Plugin");
         #[cfg(feature = "debug")]
         {

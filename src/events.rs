@@ -1,4 +1,4 @@
-use bevy::prelude::Event;
+use bevy::prelude::Message;
 
-#[derive(Debug, Copy, Clone, Event)]
+#[derive(Debug, Copy, Clone, Message)]
 pub struct CreateGameEvent;

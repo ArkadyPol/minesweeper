@@ -7,7 +7,7 @@ use bevy::{log, prelude::*};
 pub fn trigger_event_handler(
     mut commands: Commands,
     board: Res<Board>,
-    mut tile_trigger_evr: EventReader<TileTriggerEvent>,
+    mut tile_trigger_evr: MessageReader<TileTriggerEvent>,
 ) {
     for trigger_event in tile_trigger_evr.read() {
         if let Some(entity) = board.tile_to_uncover(&trigger_event.0) {
@@ -21,8 +21,8 @@ pub fn uncover_tiles(
     mut board: ResMut<Board>,
     children: Query<(Entity, &ChildOf), With<Uncover>>,
     parents: Query<(&Coordinates, Option<&Bomb>, Option<&BombNeighbor>)>,
-    mut board_completed_event_wr: EventWriter<BoardCompletedEvent>,
-    mut bomb_explosion_event_wr: EventWriter<BombExplosionEvent>,
+    mut board_completed_event_wr: MessageWriter<BoardCompletedEvent>,
+    mut bomb_explosion_event_wr: MessageWriter<BombExplosionEvent>,
 ) {
     // We iterate through tile covers to uncover
     for (entity, parent) in children.iter() {

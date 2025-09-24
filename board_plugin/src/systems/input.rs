@@ -7,9 +7,9 @@ use bevy::{input::mouse::MouseButtonInput, log, prelude::*, window::PrimaryWindo
 pub fn input_handling(
     window: Query<&Window, With<PrimaryWindow>>,
     board: Res<Board>,
-    mut button_evr: EventReader<MouseButtonInput>,
-    mut tile_trigger_ewr: EventWriter<TileTriggerEvent>,
-    mut tile_mark_ewr: EventWriter<TileMarkEvent>,
+    mut button_evr: MessageReader<MouseButtonInput>,
+    mut tile_trigger_ewr: MessageWriter<TileTriggerEvent>,
+    mut tile_mark_ewr: MessageWriter<TileMarkEvent>,
 ) {
     let window = window.single().unwrap();
 
