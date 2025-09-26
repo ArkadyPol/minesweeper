@@ -1,4 +1,5 @@
 use bevy::prelude::Component;
+use std::fmt::{self, Display, Formatter};
 use std::ops::Add;
 
 #[cfg(feature = "debug")]
@@ -23,5 +24,11 @@ impl Add<(i8, i8)> for Coordinates {
         let x = ((self.x as i16) + x as i16) as u16;
         let y = ((self.y as i16) + y as i16) as u16;
         Self { x, y }
+    }
+}
+
+impl Display for Coordinates {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "({}, {})", self.x, self.y)
     }
 }

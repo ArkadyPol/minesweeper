@@ -1,5 +1,7 @@
 pub mod components;
+mod events;
 pub mod resources;
+mod systems;
 
 use bevy::{
     log,
@@ -9,7 +11,8 @@ use bevy::{
 };
 use rand::{rng, seq::SliceRandom};
 
-use components::{Bomb, BombNeighbor, Coordinates, Neighbors};
+use components::{Bomb, BombNeighbor, Coordinates, Neighbors, TileCover};
+use events::{BoardCompletedEvent, BombExplosionEvent, TileMarkEvent, TileTriggerEvent};
 use resources::{Board, BoardAssets, BoardOptions, BoardPosition, TileSize};
 
 pub struct BoardPluginV2<T, U> {
@@ -24,7 +27,16 @@ impl<T: ComputedStates, U: States> Plugin for BoardPluginV2<T, U> {
             OnEnter(self.running_state.clone()),
             (Self::create_board, Self::set_bombs).chain(),
         )
+        // We handle input and trigger events only if the state is active
+        .add_systems(
+            Update,
+            (systems::input::input_handling).run_if(in_state(self.not_pause.clone())),
+        )
         .add_systems(OnExit(self.running_state.clone()), Self::cleanup_board);
+        app.add_message::<TileTriggerEvent>();
+        app.add_message::<BoardCompletedEvent>();
+        app.add_message::<BombExplosionEvent>();
+        app.add_message::<TileMarkEvent>();
         log::info!("Loaded Board Plugin");
     }
 }
@@ -126,17 +138,14 @@ impl<T, U> BoardPluginV2<T, U> {
 
         for i in 0..bomb_count {
             if let Some((entity, _)) = entities.get(i) {
-                commands.entity(*entity).insert((
-                    Bomb,
-                    children![(
-                        Sprite {
-                            color: board_assets.bomb_material.color,
-                            image: board_assets.bomb_material.texture.clone(),
-                            custom_size: Some(Vec2::splat(size - padding)),
-                            ..Default::default()
-                        },
-                        Transform::from_xyz(0., 0., 1.),
-                    )],
+                commands.entity(*entity).insert(Bomb).with_child((
+                    Sprite {
+                        color: board_assets.bomb_material.color,
+                        image: board_assets.bomb_material.texture.clone(),
+                        custom_size: Some(Vec2::splat(size - padding)),
+                        ..Default::default()
+                    },
+                    Transform::from_xyz(0., 0., 1.),
                 ));
                 bomb_entities.insert(*entity);
             }
@@ -151,14 +160,14 @@ impl<T, U> BoardPluginV2<T, U> {
                 .count() as u8;
 
             if count > 0 {
-                commands.entity(entity).insert((
-                    BombNeighbor { count },
-                    children![Self::bomb_count_text_bundle(
+                commands
+                    .entity(entity)
+                    .insert(BombNeighbor { count })
+                    .with_child(Self::bomb_count_text_bundle(
                         count,
                         &board_assets,
                         (size - padding) * 0.5,
-                    )],
-                ));
+                    ));
             }
         }
     }
@@ -201,6 +210,19 @@ impl<T, U> BoardPluginV2<T, U> {
                             1.,
                         ),
                         coordinates,
+                        // We add the cover sprites
+                        children![(
+                            Name::new("Tile Cover"),
+                            Sprite {
+                                custom_size: Some(Vec2::splat(size - padding)),
+                                color: board_assets.covered_tile_material.color,
+                                image: board_assets.covered_tile_material.texture.clone(),
+                                ..Default::default()
+                            },
+                            Transform::from_xyz(0., 0., 2.),
+                            TileCover,
+                            Pickable::default(),
+                        )],
                     ))
                     .id();
 
