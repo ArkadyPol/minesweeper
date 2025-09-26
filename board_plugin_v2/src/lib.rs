@@ -1,11 +1,16 @@
 pub mod components;
 pub mod resources;
 
-use bevy::{log, platform::collections::HashMap, prelude::*, window::PrimaryWindow};
+use bevy::{
+    log,
+    platform::collections::{HashMap, HashSet},
+    prelude::*,
+    window::PrimaryWindow,
+};
+use rand::{rng, seq::SliceRandom};
 
-use resources::{BoardAssets, BoardOptions, BoardPosition, TileSize};
-
-use components::{Coordinates, Neighbors};
+use components::{Bomb, BombNeighbor, Coordinates, Neighbors};
+use resources::{Board, BoardAssets, BoardOptions, BoardPosition, TileSize};
 
 pub struct BoardPluginV2<T, U> {
     pub running_state: T,
@@ -15,7 +20,11 @@ pub struct BoardPluginV2<T, U> {
 impl<T: ComputedStates, U: States> Plugin for BoardPluginV2<T, U> {
     fn build(&self, app: &mut App) {
         // When the running states comes into the stack we load a board
-        app.add_systems(OnEnter(self.running_state.clone()), Self::create_board);
+        app.add_systems(
+            OnEnter(self.running_state.clone()),
+            (Self::create_board, Self::set_bombs).chain(),
+        )
+        .add_systems(OnExit(self.running_state.clone()), Self::cleanup_board);
         log::info!("Loaded Board Plugin");
     }
 }
@@ -67,24 +76,91 @@ impl<T, U> BoardPluginV2<T, U> {
 
         Self::assign_neighbors(&coords_map, &mut commands);
 
-        commands.spawn((
-            Name::new("Board"),
-            Transform::from_translation(board_position),
-            Visibility::default(),
-            Children::spawn((
-                Spawn((
-                    Name::new("Background"),
-                    Sprite {
-                        color: board_assets.board_material.color,
-                        custom_size: Some(board_size),
-                        image: board_assets.board_material.texture.clone(),
-                        ..Default::default()
-                    },
-                    Transform::from_xyz(board_size.x / 2., board_size.y / 2., 0.),
+        let board_entity = commands
+            .spawn((
+                Name::new("Board"),
+                Transform::from_translation(board_position),
+                Visibility::default(),
+                Children::spawn((
+                    Spawn((
+                        Name::new("Background"),
+                        Sprite {
+                            color: board_assets.board_material.color,
+                            custom_size: Some(board_size),
+                            image: board_assets.board_material.texture.clone(),
+                            ..Default::default()
+                        },
+                        Transform::from_xyz(board_size.x / 2., board_size.y / 2., 0.),
+                    )),
+                    WithRelated::new(coords_map.into_values()),
                 )),
-                WithRelated::new(coords_map.into_values()),
-            )),
-        ));
+            ))
+            .id();
+
+        commands.insert_resource(Board {
+            tile_size,
+            entity: board_entity,
+        });
+    }
+
+    /// Places bombs and bomb neighbor tiles
+    fn set_bombs(
+        query: Query<(Entity, &Neighbors), With<Coordinates>>,
+        mut commands: Commands,
+        board_options: Option<Res<BoardOptions>>,
+        board_assets: Res<BoardAssets>,
+        board: Res<Board>,
+    ) {
+        let mut rng = rng();
+        let options = match board_options {
+            None => BoardOptions::default(), // If no options is set we use the default one
+            Some(o) => o.clone(),
+        };
+        let bomb_count = options.bomb_count as usize;
+        let padding = options.tile_padding;
+        let size = board.tile_size;
+
+        let mut entities: Vec<(Entity, &Neighbors)> = query.iter().map(|q| q).collect();
+        entities.shuffle(&mut rng);
+        let mut bomb_entities = HashSet::new();
+
+        for i in 0..bomb_count {
+            if let Some((entity, _)) = entities.get(i) {
+                commands.entity(*entity).insert((
+                    Bomb,
+                    children![(
+                        Sprite {
+                            color: board_assets.bomb_material.color,
+                            image: board_assets.bomb_material.texture.clone(),
+                            custom_size: Some(Vec2::splat(size - padding)),
+                            ..Default::default()
+                        },
+                        Transform::from_xyz(0., 0., 1.),
+                    )],
+                ));
+                bomb_entities.insert(*entity);
+            }
+        }
+
+        for (entity, neighbors) in entities.iter().skip(bomb_count).copied() {
+            let count = neighbors
+                .neighbors
+                .iter()
+                .flatten()
+                .filter(|&e| bomb_entities.contains(e))
+                .count() as u8;
+
+            if count > 0 {
+                commands.entity(entity).insert((
+                    BombNeighbor { count },
+                    children![Self::bomb_count_text_bundle(
+                        count,
+                        &board_assets,
+                        (size - padding) * 0.5,
+                    )],
+                ));
+            }
+        }
     }
 
     /// Computes a tile size that matches the window according to the tile map size
@@ -133,6 +209,23 @@ impl<T, U> BoardPluginV2<T, U> {
         }
     }
 
+    /// Generates the bomb counter text 2D Bundle for a given value
+    fn bomb_count_text_bundle(count: u8, board_assets: &BoardAssets, size: f32) -> impl Bundle {
+        // We retrieve the text and the correct color
+        let color = board_assets.bomb_counter_color(count);
+        // We generate a text bundle
+        (
+            Text2d::new(count.to_string()),
+            TextFont {
+                font: board_assets.bomb_counter_font.clone(),
+                font_size: size,
+                ..Default::default()
+            },
+            TextColor(color),
+            Transform::from_xyz(0., 0., 1.),
+        )
+    }
+
     fn assign_neighbors(coords_map: &HashMap<Coordinates, Entity>, commands: &mut Commands) {
         /// Delta coordinates for all 8 square neighbors
         const SQUARE_COORDINATES: [(i8, i8); 8] = [
@@ -160,5 +253,10 @@ impl<T, U> BoardPluginV2<T, U> {
                 .map(|c| coords_map.get(&c).copied());
             commands.entity(entity).insert(Neighbors { neighbors });
         }
+    }
+
+    fn cleanup_board(board: Res<Board>, mut commands: Commands) {
+        commands.entity(board.entity).despawn();
+        commands.remove_resource::<Board>();
     }
 }
