@@ -1,0 +1,23 @@
+[package]
+name = "board_plugin_v2"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = []
+debug = ["colored", "bevy-inspector-egui"]
+
+[dependencies]
+# Engine
+bevy = "=0.17.0-rc.2"
+
+# Serialization
+serde = "1.0.225"
+
+# Random
+rand = "0.9.2"
+
+# Console Debug
+colored = { version = "3.0.0", optional = true }
+# Hierarchy inspector debug
+bevy-inspector-egui = { version = "0.33.1", optional = true }

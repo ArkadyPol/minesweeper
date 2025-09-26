@@ -5,18 +5,22 @@ edition = "2024"
 
 [features]
 default = []
-debug = ["board_plugin/debug", "bevy-inspector-egui"]
+board_v1 = ["board_plugin"]
+board_v2 = ["board_plugin_v2"]
+debug = ["board_plugin/debug", "board_plugin_v2/debug", "bevy-inspector-egui"]
 
 [dependencies]
 bevy = "=0.17.0-rc.2"
-board_plugin = { path = "board_plugin" }
+board_plugin = { path = "board_plugin", optional = true }
+board_plugin_v2 = { path = "board_plugin_v2", optional = true }
 
 # Hierarchy inspector debug
 bevy-inspector-egui = { version = "0.33.1", optional = true }
 
 [workspace]
 members = [
-    "board_plugin"
+    "board_plugin",
+    "board_plugin_v2"
 ]
 
 # Enable optimizations for dependencies (incl. Bevy), but not for our code:

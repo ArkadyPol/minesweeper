@@ -1,8 +1,9 @@
 use bevy::color::palettes::css::{DARK_GRAY, GRAY};
 use bevy::{log, prelude::*};
-use board_plugin::BoardPlugin;
+#[cfg(feature = "board_v1")]
 use board_plugin::resources::{BoardAssets, BoardOptions, SpriteMaterial};
-
+#[cfg(feature = "board_v2")]
+use board_plugin_v2::resources::{BoardAssets, BoardOptions, SpriteMaterial};
 use events::CreateGameEvent;
 
 mod events;
@@ -49,10 +50,26 @@ fn main() {
     }));
     app.init_state::<AppState>();
     app.add_computed_state::<InGame>();
-    app.add_plugins(BoardPlugin {
-        running_state: InGame,
-        not_pause: AppState::start_game(),
-    });
+    #[cfg(feature = "board_v1")]
+    {
+        use board_plugin::BoardPlugin;
+
+        app.add_plugins(BoardPlugin {
+            running_state: InGame,
+            not_pause: AppState::start_game(),
+        });
+    }
+
+    #[cfg(feature = "board_v2")]
+    {
+        use board_plugin_v2::BoardPluginV2;
+
+        app.add_plugins(BoardPluginV2 {
+            running_state: InGame,
+            not_pause: AppState::start_game(),
+        });
+    }
+
     // Debug hierarchy inspector
     #[cfg(feature = "debug")]
     {
