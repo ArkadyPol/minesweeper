@@ -11,7 +11,7 @@ use bevy::{
 };
 use rand::{rng, seq::SliceRandom};
 
-use components::{Bomb, BombNeighbor, Coordinates, Neighbors, TileCover};
+use components::{Bomb, BombNeighbor, Coordinates, Neighbors, TileCover, Uncover};
 use events::{BoardCompletedEvent, BombExplosionEvent, TileMarkEvent, TileTriggerEvent};
 use resources::{Board, BoardAssets, BoardOptions, BoardPosition, TileSize};
 
@@ -30,7 +30,16 @@ impl<T: ComputedStates, U: States> Plugin for BoardPluginV2<T, U> {
         // We handle input and trigger events only if the state is active
         .add_systems(
             Update,
-            (systems::input::input_handling).run_if(in_state(self.not_pause.clone())),
+            (
+                systems::input::input_handling,
+                systems::uncover::trigger_event_handler,
+            )
+                .run_if(in_state(self.not_pause.clone())),
+        )
+        // We handle uncovering even if the state is inactive
+        .add_systems(
+            Update,
+            (systems::uncover::uncover_tiles).run_if(in_state(self.running_state.clone())),
         )
         .add_systems(OnExit(self.running_state.clone()), Self::cleanup_board);
         app.add_message::<TileTriggerEvent>();
@@ -117,7 +126,8 @@ impl<T, U> BoardPluginV2<T, U> {
 
     /// Places bombs and bomb neighbor tiles
     fn set_bombs(
-        query: Query<(Entity, &Neighbors), With<Coordinates>>,
+        query: Query<(Entity, &Neighbors, &Children), With<Coordinates>>,
+        cover_query: Query<(), With<TileCover>>,
         mut commands: Commands,
         board_options: Option<Res<BoardOptions>>,
         board_assets: Res<BoardAssets>,
@@ -132,7 +142,8 @@ impl<T, U> BoardPluginV2<T, U> {
         let padding = options.tile_padding;
         let size = board.tile_size;
 
-        let mut entities: Vec<(Entity, &Neighbors)> = query.iter().map(|q| q).collect();
+        let mut entities: Vec<(Entity, &Neighbors)> =
+            query.iter().map(|(e, n, _)| (e, n)).collect();
         entities.shuffle(&mut rng);
         let mut bomb_entities = HashSet::new();
 
@@ -151,6 +162,8 @@ impl<T, U> BoardPluginV2<T, U> {
             }
         }
 
+        let mut safe_start = None;
+
         for (entity, neighbors) in entities.iter().skip(bomb_count).copied() {
             let count = neighbors
                 .neighbors
@@ -168,6 +181,18 @@ impl<T, U> BoardPluginV2<T, U> {
                         &board_assets,
                         (size - padding) * 0.5,
                     ));
+            } else if safe_start.is_none() {
+                safe_start = Some(entity);
+            }
+        }
+        if options.safe_start {
+            if let Some(entity) = safe_start {
+                let (_, _, children) = query.get(entity).unwrap();
+                for &child in children {
+                    if cover_query.get(child).is_ok() {
+                        commands.entity(child).insert(Uncover);
+                    }
+                }
             }
         }
     }

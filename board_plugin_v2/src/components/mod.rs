@@ -3,9 +3,11 @@ pub use bomb_neighbor::BombNeighbor;
 pub use coordinates::Coordinates;
 pub use neighbors::Neighbors;
 pub use tile_cover::TileCover;
+pub use uncover::Uncover;
 
 mod bomb;
 mod bomb_neighbor;
 mod coordinates;
 mod neighbors;
 mod tile_cover;
+mod uncover;
