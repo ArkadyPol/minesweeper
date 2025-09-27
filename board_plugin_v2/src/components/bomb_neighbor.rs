@@ -1,6 +1,5 @@
 use bevy::prelude::Component;
 
-/// Bomb neighbor component
 #[cfg(feature = "debug")]
 use bevy::prelude::ReflectComponent;
 #[cfg(feature = "debug")]

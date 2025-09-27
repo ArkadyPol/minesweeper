@@ -10,4 +10,4 @@ use bevy_inspector_egui::prelude::ReflectInspectorOptions;
     reflect(Component, InspectorOptions)
 )]
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Component)]
-pub struct Uncover;
+pub struct Flag;

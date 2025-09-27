@@ -1,6 +1,7 @@
 pub use bomb::Bomb;
 pub use bomb_neighbor::BombNeighbor;
 pub use coordinates::Coordinates;
+pub use flag::Flag;
 pub use neighbors::Neighbors;
 pub use tile_cover::TileCover;
 pub use uncover::Uncover;
@@ -8,6 +9,7 @@ pub use uncover::Uncover;
 mod bomb;
 mod bomb_neighbor;
 mod coordinates;
+mod flag;
 mod neighbors;
 mod tile_cover;
 mod uncover;

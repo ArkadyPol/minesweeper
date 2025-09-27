@@ -39,7 +39,8 @@ impl<T: ComputedStates, U: States> Plugin for BoardPluginV2<T, U> {
         // We handle uncovering even if the state is inactive
         .add_systems(
             Update,
-            (systems::uncover::uncover_tiles).run_if(in_state(self.running_state.clone())),
+            (systems::uncover::uncover_tiles, systems::mark::mark_tiles)
+                .run_if(in_state(self.running_state.clone())),
         )
         .add_systems(OnExit(self.running_state.clone()), Self::cleanup_board);
         app.add_message::<TileTriggerEvent>();
@@ -47,6 +48,16 @@ impl<T: ComputedStates, U: States> Plugin for BoardPluginV2<T, U> {
         app.add_message::<BombExplosionEvent>();
         app.add_message::<TileMarkEvent>();
         log::info!("Loaded Board Plugin");
+        #[cfg(feature = "debug")]
+        {
+            // registering custom component to be able to edit it in inspector
+            app.register_type::<Coordinates>();
+            app.register_type::<BombNeighbor>();
+            app.register_type::<Bomb>();
+            app.register_type::<Uncover>();
+            app.register_type::<Neighbors>();
+            app.register_type::<TileCover>();
+        }
     }
 }
 
@@ -245,8 +256,8 @@ impl<T, U> BoardPluginV2<T, U> {
                                 ..Default::default()
                             },
                             Transform::from_xyz(0., 0., 2.),
-                            TileCover,
                             Pickable::default(),
+                            TileCover,
                         )],
                     ))
                     .id();

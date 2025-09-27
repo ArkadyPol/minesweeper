@@ -48,6 +48,10 @@ fn main() {
         }),
         ..Default::default()
     }));
+    app.insert_resource(SpritePickingSettings {
+        picking_mode: SpritePickingMode::BoundingBox,
+        ..Default::default()
+    });
     app.init_state::<AppState>();
     app.add_computed_state::<InGame>();
     #[cfg(feature = "board_v1")]
