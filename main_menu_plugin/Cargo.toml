@@ -1,0 +1,15 @@
+[package]
+name = "main_menu_plugin"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = []
+debug = ["bevy-inspector-egui"]
+
+[dependencies]
+# Engine
+bevy = "=0.17.0-rc.2"
+
+# Hierarchy inspector debug
+bevy-inspector-egui = { version = "0.33.1", optional = true }

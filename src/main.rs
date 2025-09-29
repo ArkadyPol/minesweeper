@@ -4,16 +4,15 @@ use bevy::{log, prelude::*};
 use board_plugin::resources::{BoardAssets, BoardOptions, SpriteMaterial};
 #[cfg(feature = "board_v2")]
 use board_plugin_v2::resources::{BoardAssets, BoardOptions, SpriteMaterial};
-use events::CreateGameEvent;
-
-mod events;
+use main_menu_plugin::{MainMenuPlugin, events::CreateGameEvent};
 
 #[derive(Debug, Clone, Default, Eq, PartialEq, Hash, States)]
 pub enum AppState {
+    #[default]
+    MainMenu,
     InGame {
         paused: bool,
     },
-    #[default]
     Out,
 }
 
@@ -74,6 +73,10 @@ fn main() {
         });
     }
 
+    app.add_plugins(MainMenuPlugin {
+        running_state: AppState::MainMenu,
+    });
+
     // Debug hierarchy inspector
     #[cfg(feature = "debug")]
     {
@@ -87,7 +90,6 @@ fn main() {
     // State handling
     app.add_systems(Update, (handle_create_game_event, state_handler).chain());
 
-    app.add_message::<CreateGameEvent>();
     // Run the app
     app.run();
 }
@@ -147,11 +149,7 @@ fn handle_create_game_event(
     }
 }
 
-fn setup_board(
-    mut commands: Commands,
-    mut next_state: ResMut<NextState<AppState>>,
-    asset_server: Res<AssetServer>,
-) {
+fn setup_board(mut commands: Commands, asset_server: Res<AssetServer>) {
     // Board plugin options
     commands.insert_resource(BoardOptions {
         map_size: (20, 20),
@@ -186,6 +184,4 @@ fn setup_board(
             color: Color::WHITE,
         },
     });
-    // Plugin activation
-    next_state.set(AppState::start_game());
 }
