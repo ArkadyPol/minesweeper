@@ -11,9 +11,8 @@ use bevy::{
 use bounds::Bounds2;
 use components::{Bomb, BombNeighbor, Coordinates, Uncover};
 use events::{BoardCompletedEvent, BombExplosionEvent, TileMarkEvent, TileTriggerEvent};
-use resources::{
-    Board, BoardAssets, BoardOptions, BoardPosition, TileSize, tile::Tile, tile_map::TileMap,
-};
+use resources::{Board, tile::Tile, tile_map::TileMap};
+use settings_plugin::resources::{BoardAssets, BoardOptions, BoardPosition, TileSize};
 
 pub struct BoardPlugin<T, U> {
     pub running_state: T,

@@ -13,7 +13,8 @@ use rand::{rng, seq::SliceRandom};
 
 use components::{Bomb, BombNeighbor, Coordinates, Neighbors, TileCover, Uncover};
 use events::{BoardCompletedEvent, BombExplosionEvent, TileMarkEvent, TileTriggerEvent};
-use resources::{Board, BoardAssets, BoardOptions, BoardPosition, TileSize};
+use resources::Board;
+use settings_plugin::resources::{BoardAssets, BoardOptions, BoardPosition, TileSize};
 
 pub struct BoardPluginV2<T, U> {
     pub running_state: T,

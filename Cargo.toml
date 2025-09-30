@@ -7,13 +7,20 @@ edition = "2024"
 default = []
 board_v1 = ["board_plugin"]
 board_v2 = ["board_plugin_v2"]
-debug = ["board_plugin/debug", "board_plugin_v2/debug", "main_menu_plugin/debug", "bevy-inspector-egui"]
+debug = [
+    "board_plugin/debug", 
+    "board_plugin_v2/debug", 
+    "main_menu_plugin/debug", 
+    "settings_plugin/debug", 
+    "bevy-inspector-egui"
+]
 
 [dependencies]
 bevy = "=0.17.0-rc.2"
 board_plugin = { path = "board_plugin", optional = true }
 board_plugin_v2 = { path = "board_plugin_v2", optional = true }
 main_menu_plugin = { path = "main_menu_plugin"}
+settings_plugin = { path = "settings_plugin"}
 
 # Hierarchy inspector debug
 bevy-inspector-egui = { version = "0.33.1", optional = true }

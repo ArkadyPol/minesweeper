@@ -8,11 +8,9 @@ default = []
 debug = ["colored", "bevy-inspector-egui"]
 
 [dependencies]
+settings_plugin = { path = "../settings_plugin"}
 # Engine
 bevy = "=0.17.0-rc.2"
-
-# Serialization
-serde = "1.0.225"
 
 # Random
 rand = "0.9.2"

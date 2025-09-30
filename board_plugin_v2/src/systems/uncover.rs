@@ -1,9 +1,9 @@
 use bevy::{log, prelude::*};
 
 use crate::{
+    BoardOptions,
     components::{Bomb, BombNeighbor, Neighbors, TileCover, Uncover},
     events::{BoardCompletedEvent, BombExplosionEvent, TileTriggerEvent},
-    resources::BoardOptions,
 };
 
 pub fn trigger_event_handler(

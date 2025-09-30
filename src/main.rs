@@ -1,15 +1,12 @@
-use bevy::color::palettes::css::{DARK_GRAY, GRAY};
 use bevy::{log, prelude::*};
-#[cfg(feature = "board_v1")]
-use board_plugin::resources::{BoardAssets, BoardOptions, SpriteMaterial};
-#[cfg(feature = "board_v2")]
-use board_plugin_v2::resources::{BoardAssets, BoardOptions, SpriteMaterial};
-use main_menu_plugin::{MainMenuPlugin, events::CreateGameEvent};
+use main_menu_plugin::{MainMenuPlugin, events::LoadSettingsEvent};
+use settings_plugin::{SettingsPlugin, events::CreateGameEvent};
 
 #[derive(Debug, Clone, Default, Eq, PartialEq, Hash, States)]
 pub enum AppState {
     #[default]
     MainMenu,
+    Settings,
     InGame {
         paused: bool,
     },
@@ -73,9 +70,14 @@ fn main() {
         });
     }
 
-    app.add_plugins(MainMenuPlugin {
-        running_state: AppState::MainMenu,
-    });
+    app.add_plugins((
+        MainMenuPlugin {
+            running_state: AppState::MainMenu,
+        },
+        SettingsPlugin {
+            running_state: AppState::Settings,
+        },
+    ));
 
     // Debug hierarchy inspector
     #[cfg(feature = "debug")]
@@ -86,9 +88,9 @@ fn main() {
         app.add_plugins((EguiPlugin::default(), WorldInspectorPlugin::new()));
     }
     // Startup system (cameras) & board
-    app.add_systems(Startup, (camera_setup, setup_board));
+    app.add_systems(Startup, camera_setup);
     // State handling
-    app.add_systems(Update, (handle_create_game_event, state_handler).chain());
+    app.add_systems(Update, (handle_state_game_events, state_handler).chain());
 
     // Run the app
     app.run();
@@ -139,49 +141,17 @@ fn state_handler(
     }
 }
 
-fn handle_create_game_event(
-    mut reader: MessageReader<CreateGameEvent>,
+fn handle_state_game_events(
+    mut create_game_reader: MessageReader<CreateGameEvent>,
+    mut load_settings_reader: MessageReader<LoadSettingsEvent>,
     mut next_state: ResMut<NextState<AppState>>,
 ) {
-    for _ev in reader.read() {
+    for _ev in create_game_reader.read() {
         log::info!("loading game from event");
         next_state.set(AppState::start_game());
     }
-}
-
-fn setup_board(mut commands: Commands, asset_server: Res<AssetServer>) {
-    // Board plugin options
-    commands.insert_resource(BoardOptions {
-        map_size: (20, 20),
-        bomb_count: 40,
-        tile_padding: 1.,
-        safe_start: true,
-        ..Default::default()
-    });
-    // Board assets
-    commands.insert_resource(BoardAssets {
-        label: "Default".to_string(),
-        board_material: SpriteMaterial {
-            color: Color::WHITE,
-            ..Default::default()
-        },
-        tile_material: SpriteMaterial {
-            color: Color::from(DARK_GRAY),
-            ..Default::default()
-        },
-        covered_tile_material: SpriteMaterial {
-            color: Color::from(GRAY),
-            ..Default::default()
-        },
-        bomb_counter_font: asset_server.load("fonts/pixeled.ttf"),
-        bomb_counter_colors: BoardAssets::default_colors(),
-        flag_material: SpriteMaterial {
-            texture: asset_server.load("sprites/flag.png"),
-            color: Color::WHITE,
-        },
-        bomb_material: SpriteMaterial {
-            texture: asset_server.load("sprites/bomb.png"),
-            color: Color::WHITE,
-        },
-    });
+    for _ev in load_settings_reader.read() {
+        log::info!("loading settings from event");
+        next_state.set(AppState::Settings);
+    }
 }

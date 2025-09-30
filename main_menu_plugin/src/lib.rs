@@ -8,7 +8,7 @@ use bevy::{
 };
 
 use components::{MenuButtonAction, MenuUIRoot};
-use events::CreateGameEvent;
+use events::LoadSettingsEvent;
 
 pub struct MainMenuPlugin<T> {
     pub running_state: T,
@@ -24,7 +24,7 @@ impl<T: States> Plugin for MainMenuPlugin<T> {
                     .run_if(in_state(self.running_state.clone())),
             )
             .add_systems(OnExit(self.running_state.clone()), Self::cleanup_menu);
-        app.add_message::<CreateGameEvent>();
+        app.add_message::<LoadSettingsEvent>();
     }
 }
 
@@ -86,14 +86,14 @@ impl<T> MainMenuPlugin<T> {
             (&Interaction, &MenuButtonAction),
             (Changed<Interaction>, With<Button>),
         >,
-        mut start_game: MessageWriter<CreateGameEvent>,
+        mut load_settings: MessageWriter<LoadSettingsEvent>,
         mut exit: MessageWriter<AppExit>,
     ) {
         for (interaction, action) in &mut interaction_query {
             if *interaction == Interaction::Pressed {
                 match action {
                     MenuButtonAction::StartGame => {
-                        start_game.write(CreateGameEvent);
+                        load_settings.write(LoadSettingsEvent);
                     }
                     MenuButtonAction::Quit => {
                         exit.write(AppExit::Success);

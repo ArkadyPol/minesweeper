@@ -2,5 +2,3 @@ use bevy::prelude::Message;
 
 #[derive(Debug, Copy, Clone, Message)]
 pub struct CreateGameEvent;
-#[derive(Debug, Copy, Clone, Message)]
-pub struct LoadSettingsEvent;

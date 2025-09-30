@@ -2474,7 +2474,7 @@ dependencies = [
  "bevy-inspector-egui",
  "colored",
  "rand 0.9.2",
- "serde",
+ "settings_plugin",
 ]
 
 [[package]]
@@ -2485,7 +2485,7 @@ dependencies = [
  "bevy-inspector-egui",
  "colored",
  "rand 0.9.2",
- "serde",
+ "settings_plugin",
 ]
 
 [[package]]
@@ -4065,6 +4065,7 @@ dependencies = [
  "board_plugin",
  "board_plugin_v2",
  "main_menu_plugin",
+ "settings_plugin",
 ]
 
 [[package]]
@@ -5316,6 +5317,15 @@ dependencies = [
  "ryu",
  "serde",
  "serde_core",
+]
+
+[[package]]
+name = "settings_plugin"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy-inspector-egui",
+ "serde",
 ]
 
 [[package]]
