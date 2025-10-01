@@ -3,8 +3,11 @@ pub mod resources;
 
 use bevy::{
     color::palettes::css::{DARK_GRAY, GRAY},
+    log,
     prelude::*,
 };
+use ron::ser::{PrettyConfig, to_string_pretty};
+use std::fs;
 
 use events::CreateGameEvent;
 use resources::{BoardAssets, BoardOptions, SpriteMaterial};
@@ -27,13 +30,14 @@ impl<T> SettingsPlugin<T> {
         mut create_game: MessageWriter<CreateGameEvent>,
     ) {
         // Board plugin options
-        commands.insert_resource(BoardOptions {
-            map_size: (20, 20),
-            bomb_count: 40,
-            tile_padding: 1.,
-            safe_start: true,
-            ..Default::default()
-        });
+        let board_options: BoardOptions = fs::read_to_string("board_options.ron")
+            .map(|s| ron::from_str(&s).unwrap())
+            .unwrap();
+
+        log::info!("{:?}", board_options);
+
+        commands.insert_resource(board_options.clone());
+
         // Board assets
         commands.insert_resource(BoardAssets {
             label: "Default".to_string(),
@@ -60,6 +64,12 @@ impl<T> SettingsPlugin<T> {
                 color: Color::WHITE,
             },
         });
+
+        fs::write(
+            "board_options.ron",
+            to_string_pretty(&board_options, PrettyConfig::default()).unwrap(),
+        )
+        .expect("Error saving settings");
 
         create_game.write(CreateGameEvent);
     }

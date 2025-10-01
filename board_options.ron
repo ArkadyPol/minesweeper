@@ -1,0 +1,13 @@
+(
+    map_size: (20, 20),
+    bomb_count: 40,
+    position: Centered(
+        offset: (0.0, 0.0, 0.0),
+    ),
+    tile_size: Adaptive(
+        min: 10.0,
+        max: 50.0,
+    ),
+    tile_padding: 1.0,
+    safe_start: true,
+)

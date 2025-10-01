@@ -13,6 +13,7 @@ bevy = "=0.17.0-rc.2"
 
 # Serialization
 serde = "1.0.225"
+ron = "0.11.0"
 
 # Hierarchy inspector debug
 bevy-inspector-egui = { version = "0.33.1", optional = true }
