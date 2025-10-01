@@ -16,7 +16,7 @@ debug = [
 ]
 
 [dependencies]
-bevy = "0.17.0"
+bevy = "0.17.1"
 board_plugin = { path = "board_plugin", optional = true }
 board_plugin_v2 = { path = "board_plugin_v2", optional = true }
 main_menu_plugin = { path = "main_menu_plugin"}
