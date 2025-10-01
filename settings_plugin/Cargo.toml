@@ -9,10 +9,10 @@ debug = ["bevy-inspector-egui"]
 
 [dependencies]
 # Engine
-bevy = "=0.17.0-rc.2"
+bevy = "0.17.0"
 
 # Serialization
-serde = "1.0.225"
+serde = "1.0.228"
 ron = "0.11.0"
 
 # Hierarchy inspector debug
