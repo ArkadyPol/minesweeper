@@ -10,8 +10,7 @@ pub fn input_handling(
     tile_query: Query<&Coordinates>,
     cover_query: Query<&ChildOf, With<TileCover>>,
     flag_query: Query<(), With<Flag>>,
-    mut tile_trigger_ewr: MessageWriter<TileTriggerEvent>,
-    mut tile_mark_ewr: MessageWriter<TileMarkEvent>,
+    mut commands: Commands,
 ) {
     if let Ok(parent) = cover_query.get(click.entity) {
         if let Ok(&coordinates) = tile_query.get(parent.parent()) {
@@ -21,12 +20,15 @@ pub fn input_handling(
                 PointerButton::Primary => {
                     log::info!("Trying to uncover tile on {}", coordinates);
                     if !is_flag {
-                        tile_trigger_ewr.write(TileTriggerEvent(click.entity));
+                        commands.trigger(TileTriggerEvent(click.entity));
                     }
                 }
                 PointerButton::Secondary => {
                     log::info!("Trying to mark tile on {}", coordinates);
-                    tile_mark_ewr.write(TileMarkEvent(click.entity, !is_flag));
+                    commands.trigger(TileMarkEvent {
+                        entity: click.entity,
+                        mark: !is_flag,
+                    });
                 }
                 _ => (),
             }

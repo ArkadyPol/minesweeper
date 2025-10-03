@@ -6,13 +6,8 @@ use crate::{
     events::{BoardCompletedEvent, BombExplosionEvent, TileTriggerEvent},
 };
 
-pub fn trigger_event_handler(
-    mut commands: Commands,
-    mut tile_trigger_evr: MessageReader<TileTriggerEvent>,
-) {
-    for TileTriggerEvent(entity) in tile_trigger_evr.read() {
-        commands.entity(*entity).insert(Uncover);
-    }
+pub fn trigger_event_handler(event: On<TileTriggerEvent>, mut commands: Commands) {
+    commands.entity(event.0).insert(Uncover);
 }
 
 pub fn uncover_tiles(
@@ -21,8 +16,6 @@ pub fn uncover_tiles(
     parents: Query<(&Neighbors, &Children, Option<&Bomb>, Option<&BombNeighbor>)>,
     cover_query: Query<(), (With<TileCover>, Without<Uncover>)>,
     board_options: Option<Res<BoardOptions>>,
-    mut board_completed_event_wr: MessageWriter<BoardCompletedEvent>,
-    mut bomb_explosion_event_wr: MessageWriter<BombExplosionEvent>,
 ) {
     let options = match board_options {
         None => BoardOptions::default(), // If no options is set we use the default one
@@ -45,12 +38,12 @@ pub fn uncover_tiles(
 
         if cover_query.count() == bomb_count {
             log::info!("Board completed");
-            board_completed_event_wr.write(BoardCompletedEvent);
+            commands.trigger(BoardCompletedEvent);
         }
 
         if bomb.is_some() {
             log::info!("Boom !");
-            bomb_explosion_event_wr.write(BombExplosionEvent);
+            commands.trigger(BombExplosionEvent);
         }
         // If the tile is empty..
         else if bomb_counter.is_none() {

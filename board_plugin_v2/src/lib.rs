@@ -12,10 +12,14 @@ use bevy::{
 use rand::{rng, seq::SliceRandom};
 
 use components::{Bomb, BombNeighbor, Coordinates, Neighbors, TileCover, Uncover};
-use events::{BoardCompletedEvent, BombExplosionEvent, TileMarkEvent, TileTriggerEvent};
+use events::TileMarkEvent;
 use resources::{Board, BoardObservers};
 use settings_plugin::resources::{BoardAssets, BoardOptions, BoardPosition, TileSize};
-use systems::input::input_handling;
+use systems::{
+    input::input_handling,
+    mark::mark_tiles,
+    uncover::{trigger_event_handler, uncover_tiles},
+};
 
 pub struct BoardPluginV2<T, U> {
     pub running_state: T,
@@ -31,22 +35,13 @@ impl<T: ComputedStates, U: States> Plugin for BoardPluginV2<T, U> {
         )
         // We handle input and trigger events only if the state is active
         .add_systems(OnEnter(self.not_pause.clone()), Self::init_observers)
-        .add_systems(
-            Update,
-            systems::uncover::trigger_event_handler.run_if(in_state(self.not_pause.clone())),
-        )
         .add_systems(OnExit(self.not_pause.clone()), Self::cleanup_observers)
         // We handle uncovering even if the state is inactive
         .add_systems(
             Update,
-            (systems::uncover::uncover_tiles, systems::mark::mark_tiles)
-                .run_if(in_state(self.running_state.clone())),
+            (uncover_tiles).run_if(in_state(self.running_state.clone())),
         )
         .add_systems(OnExit(self.running_state.clone()), Self::cleanup_board);
-        app.add_message::<TileTriggerEvent>();
-        app.add_message::<BoardCompletedEvent>();
-        app.add_message::<BombExplosionEvent>();
-        app.add_message::<TileMarkEvent>();
         log::info!("Loaded Board Plugin");
         #[cfg(feature = "debug")]
         {
@@ -129,9 +124,12 @@ impl<T, U> BoardPluginV2<T, U> {
             ))
             .id();
 
+        let tile_mark_observer = commands.add_observer(mark_tiles).id();
+
         commands.insert_resource(Board {
             tile_size,
             entity: board_entity,
+            tile_mark_observer,
         });
     }
 
@@ -315,19 +313,26 @@ impl<T, U> BoardPluginV2<T, U> {
 
     fn cleanup_board(board: Res<Board>, mut commands: Commands) {
         commands.entity(board.entity).despawn();
+        commands.entity(board.tile_mark_observer).despawn();
         commands.remove_resource::<Board>();
     }
 
     fn init_observers(mut commands: Commands) {
-        let entity = commands.add_observer(input_handling).id();
+        let input_observer = commands.add_observer(input_handling).id();
+        let tile_trigger_observer = commands.add_observer(trigger_event_handler).id();
         commands.insert_resource(BoardObservers {
-            input_observer: entity,
+            input_observer,
+            tile_trigger_observer,
         });
     }
 
     fn cleanup_observers(board_observers: Res<BoardObservers>, mut commands: Commands) {
-        let entity = board_observers.input_observer;
-        commands.entity(entity).despawn();
+        let BoardObservers {
+            input_observer,
+            tile_trigger_observer,
+        } = *board_observers;
+        commands.entity(input_observer).despawn();
+        commands.entity(tile_trigger_observer).despawn();
         commands.remove_resource::<BoardObservers>();
     }
 }
