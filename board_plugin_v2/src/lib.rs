@@ -13,8 +13,9 @@ use rand::{rng, seq::SliceRandom};
 
 use components::{Bomb, BombNeighbor, Coordinates, Neighbors, TileCover, Uncover};
 use events::{BoardCompletedEvent, BombExplosionEvent, TileMarkEvent, TileTriggerEvent};
-use resources::Board;
+use resources::{Board, BoardObservers};
 use settings_plugin::resources::{BoardAssets, BoardOptions, BoardPosition, TileSize};
+use systems::input::input_handling;
 
 pub struct BoardPluginV2<T, U> {
     pub running_state: T,
@@ -29,14 +30,12 @@ impl<T: ComputedStates, U: States> Plugin for BoardPluginV2<T, U> {
             (Self::create_board, Self::set_bombs).chain(),
         )
         // We handle input and trigger events only if the state is active
+        .add_systems(OnEnter(self.not_pause.clone()), Self::init_observers)
         .add_systems(
             Update,
-            (
-                systems::input::input_handling,
-                systems::uncover::trigger_event_handler,
-            )
-                .run_if(in_state(self.not_pause.clone())),
+            systems::uncover::trigger_event_handler.run_if(in_state(self.not_pause.clone())),
         )
+        .add_systems(OnExit(self.not_pause.clone()), Self::cleanup_observers)
         // We handle uncovering even if the state is inactive
         .add_systems(
             Update,
@@ -317,5 +316,18 @@ impl<T, U> BoardPluginV2<T, U> {
     fn cleanup_board(board: Res<Board>, mut commands: Commands) {
         commands.entity(board.entity).despawn();
         commands.remove_resource::<Board>();
+    }
+
+    fn init_observers(mut commands: Commands) {
+        let entity = commands.add_observer(input_handling).id();
+        commands.insert_resource(BoardObservers {
+            input_observer: entity,
+        });
+    }
+
+    fn cleanup_observers(board_observers: Res<BoardObservers>, mut commands: Commands) {
+        let entity = board_observers.input_observer;
+        commands.entity(entity).despawn();
+        commands.remove_resource::<BoardObservers>();
     }
 }

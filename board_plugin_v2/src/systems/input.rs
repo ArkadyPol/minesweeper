@@ -6,40 +6,29 @@ use crate::{
 };
 
 pub fn input_handling(
-    mut events: MessageReader<Pointer<Click>>,
-    cover_query: Query<(Entity, &ChildOf), With<TileCover>>,
+    click: On<Pointer<Click>>,
     tile_query: Query<&Coordinates>,
-    flag_query: Query<&ChildOf, With<Flag>>,
+    cover_query: Query<&ChildOf, With<TileCover>>,
+    flag_query: Query<(), With<Flag>>,
     mut tile_trigger_ewr: MessageWriter<TileTriggerEvent>,
     mut tile_mark_ewr: MessageWriter<TileMarkEvent>,
 ) {
-    for event in events.read() {
-        if let Ok((entity, parent)) = cover_query.get(event.entity) {
-            if let Ok(&coordinates) = tile_query.get(parent.parent()) {
-                match event.button {
-                    PointerButton::Primary => {
-                        log::info!("Trying to uncover tile on {}", coordinates);
-                        tile_trigger_ewr.write(TileTriggerEvent(entity));
-                    }
-                    PointerButton::Secondary => {
-                        log::info!("Trying to mark tile on {}", coordinates);
-                        tile_mark_ewr.write(TileMarkEvent(entity, true));
-                    }
-                    _ => (),
-                }
-            }
-        }
-        if let Ok(parent) = flag_query.get(event.entity) {
-            if let Ok((entity, parent)) = cover_query.get(parent.parent()) {
-                if let Ok(&coordinates) = tile_query.get(parent.parent()) {
-                    match event.button {
-                        PointerButton::Secondary => {
-                            log::info!("Trying to unmark tile on {}", coordinates);
-                            tile_mark_ewr.write(TileMarkEvent(entity, false));
-                        }
-                        _ => (),
+    if let Ok(parent) = cover_query.get(click.entity) {
+        if let Ok(&coordinates) = tile_query.get(parent.parent()) {
+            let original = click.original_event_target();
+            let is_flag = flag_query.get(original).is_ok();
+            match click.button {
+                PointerButton::Primary => {
+                    log::info!("Trying to uncover tile on {}", coordinates);
+                    if !is_flag {
+                        tile_trigger_ewr.write(TileTriggerEvent(click.entity));
                     }
                 }
+                PointerButton::Secondary => {
+                    log::info!("Trying to mark tile on {}", coordinates);
+                    tile_mark_ewr.write(TileMarkEvent(click.entity, !is_flag));
+                }
+                _ => (),
             }
         }
     }
