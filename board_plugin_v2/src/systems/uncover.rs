@@ -3,7 +3,7 @@ use bevy::{log, prelude::*};
 use crate::{
     BoardOptions,
     components::{Bomb, BombNeighbor, Neighbors, TileCover, Uncover},
-    events::{BoardCompletedEvent, BombExplosionEvent, TileTriggerEvent},
+    events::{BoardCompletedEvent, BombExplosionEvent, PropagateUncoverEvent, TileTriggerEvent},
 };
 
 pub fn trigger_event_handler(event: On<TileTriggerEvent>, mut commands: Commands) {
@@ -13,7 +13,7 @@ pub fn trigger_event_handler(event: On<TileTriggerEvent>, mut commands: Commands
 pub fn uncover_tiles(
     mut commands: Commands,
     children: Query<(Entity, &ChildOf), With<Uncover>>,
-    parents: Query<(&Neighbors, &Children, Option<&Bomb>, Option<&BombNeighbor>)>,
+    parents: Query<(&Neighbors, Option<&Bomb>, Option<&BombNeighbor>)>,
     cover_query: Query<(), (With<TileCover>, Without<Uncover>)>,
     board_options: Option<Res<BoardOptions>>,
 ) {
@@ -22,13 +22,14 @@ pub fn uncover_tiles(
         Some(o) => o.clone(),
     };
     let bomb_count = options.bomb_count as usize;
+    let cover_count = cover_query.count();
 
     // We iterate through tile covers to uncover
     for (entity, parent) in children.iter() {
         // we destroy the tile cover entity
         commands.entity(entity).despawn();
 
-        let (neighbors, _, bomb, bomb_counter) = match parents.get(parent.0) {
+        let (neighbors, bomb, bomb_counter) = match parents.get(parent.0) {
             Ok(v) => v,
             Err(e) => {
                 log::error!("{}", e);
@@ -36,7 +37,7 @@ pub fn uncover_tiles(
             }
         };
 
-        if cover_query.count() == bomb_count {
+        if cover_count == bomb_count {
             log::info!("Board completed");
             commands.trigger(BoardCompletedEvent);
         }
@@ -50,14 +51,30 @@ pub fn uncover_tiles(
             // .. We propagate the uncovering by adding the `Uncover` component to adjacent tiles
             // which will then be removed next frame
             for neighbor_entity in neighbors.neighbors.iter().flatten() {
-                if let Ok((_, children, _, _)) = parents.get(*neighbor_entity) {
-                    for &child in children {
-                        if cover_query.get(child).is_ok() {
-                            commands.entity(child).insert(Uncover);
-                        }
-                    }
-                }
+                commands.trigger(PropagateUncoverEvent(*neighbor_entity));
             }
         }
+    }
+}
+
+pub fn propagate_uncover_handler(
+    event: On<PropagateUncoverEvent>,
+    children: Query<&Children>,
+    mut commands: Commands,
+) {
+    if let Ok(children) = children.get(event.0) {
+        for child in children {
+            commands.trigger(PropagateUncoverEvent(*child));
+        }
+    }
+}
+
+pub fn on_uncover_handler(
+    event: On<PropagateUncoverEvent>,
+    cover_query: Query<(), (With<TileCover>, Without<Uncover>)>,
+    mut commands: Commands,
+) {
+    if cover_query.get(event.0).is_ok() {
+        commands.entity(event.0).insert(Uncover);
     }
 }

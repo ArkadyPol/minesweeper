@@ -18,7 +18,9 @@ use settings_plugin::resources::{BoardAssets, BoardOptions, BoardPosition, TileS
 use systems::{
     input::input_handling,
     mark::mark_tiles,
-    uncover::{trigger_event_handler, uncover_tiles},
+    uncover::{
+        on_uncover_handler, propagate_uncover_handler, trigger_event_handler, uncover_tiles,
+    },
 };
 
 pub struct BoardPluginV2<T, U> {
@@ -125,11 +127,15 @@ impl<T, U> BoardPluginV2<T, U> {
             .id();
 
         let tile_mark_observer = commands.add_observer(mark_tiles).id();
+        let propagate_uncover_observer = commands.add_observer(propagate_uncover_handler).id();
+        let on_uncover_observer = commands.add_observer(on_uncover_handler).id();
 
         commands.insert_resource(Board {
             tile_size,
             entity: board_entity,
             tile_mark_observer,
+            propagate_uncover_observer,
+            on_uncover_observer,
         });
     }
 
@@ -314,6 +320,8 @@ impl<T, U> BoardPluginV2<T, U> {
     fn cleanup_board(board: Res<Board>, mut commands: Commands) {
         commands.entity(board.entity).despawn();
         commands.entity(board.tile_mark_observer).despawn();
+        commands.entity(board.propagate_uncover_observer).despawn();
+        commands.entity(board.on_uncover_observer).despawn();
         commands.remove_resource::<Board>();
     }
 

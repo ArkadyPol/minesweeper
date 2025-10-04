@@ -11,3 +11,7 @@ pub struct TileMarkEvent {
     pub entity: Entity,
     pub mark: bool,
 }
+
+#[derive(Debug, Copy, Clone, EntityEvent)]
+
+pub struct PropagateUncoverEvent(pub Entity);
