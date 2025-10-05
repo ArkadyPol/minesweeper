@@ -45,16 +45,6 @@ impl<T: ComputedStates, U: States> Plugin for BoardPluginV2<T, U> {
         )
         .add_systems(OnExit(self.running_state.clone()), Self::cleanup_board);
         log::info!("Loaded Board Plugin");
-        #[cfg(feature = "debug")]
-        {
-            // registering custom component to be able to edit it in inspector
-            app.register_type::<Coordinates>();
-            app.register_type::<BombNeighbor>();
-            app.register_type::<Bomb>();
-            app.register_type::<Uncover>();
-            app.register_type::<Neighbors>();
-            app.register_type::<TileCover>();
-        }
     }
 }
 

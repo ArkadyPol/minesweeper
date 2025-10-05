@@ -44,14 +44,6 @@ impl<T: ComputedStates, U: States> Plugin for BoardPlugin<T, U> {
         app.add_message::<BombExplosionEvent>();
         app.add_message::<TileMarkEvent>();
         log::info!("Loaded Board Plugin");
-        #[cfg(feature = "debug")]
-        {
-            // registering custom component to be able to edit it in inspector
-            app.register_type::<Coordinates>();
-            app.register_type::<BombNeighbor>();
-            app.register_type::<Bomb>();
-            app.register_type::<Uncover>();
-        }
     }
 }
 
