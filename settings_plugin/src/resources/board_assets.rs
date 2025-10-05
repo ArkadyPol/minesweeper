@@ -4,6 +4,7 @@ use bevy::{
 };
 
 /// Material of a `Sprite` with a texture and color
+#[cfg_attr(feature = "debug", derive(bevy::reflect::Reflect))]
 #[derive(Debug, Clone)]
 pub struct SpriteMaterial {
     pub color: Color,
@@ -22,6 +23,13 @@ impl Default for SpriteMaterial {
 /// Assets for the board. Must be used as a resource.
 ///
 /// Use the loader for partial setup
+#[cfg(feature = "debug")]
+use bevy_inspector_egui::prelude::ReflectInspectorOptions;
+#[cfg_attr(
+    feature = "debug",
+    derive(bevy_inspector_egui::InspectorOptions, bevy::reflect::Reflect),
+    reflect(Resource, InspectorOptions)
+)]
 #[derive(Debug, Clone, Resource)]
 pub struct BoardAssets {
     /// Label
