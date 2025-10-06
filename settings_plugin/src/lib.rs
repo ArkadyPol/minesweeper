@@ -3,13 +3,14 @@ pub mod events;
 pub mod resources;
 
 use bevy::{
-    color::palettes::css::{DARK_GRAY, DARK_GREEN, GRAY},
+    color::palettes::css::{DARK_GRAY, DARK_GREEN, GRAY, GREEN},
     log,
     prelude::*,
 };
 use ron::ser::{PrettyConfig, to_string_pretty};
 use std::fs;
 
+use components::TextInput;
 use components::{SettingsButtonAction, SettingsUIRoot};
 use events::CreateGameEvent;
 use resources::{BoardAssets, BoardOptions, SpriteMaterial};
@@ -43,25 +44,53 @@ impl<T: States> Plugin for SettingsPlugin<T> {
 impl<T> SettingsPlugin<T> {
     fn create_menu(mut commands: Commands, asset_server: Res<AssetServer>) {
         let font: Handle<Font> = asset_server.load("fonts/FiraSans-Bold.ttf");
-        commands.spawn((
-            Node {
-                width: percent(100),
-                height: percent(100),
-                justify_content: JustifyContent::Center,
-                align_items: AlignItems::Center,
-                ..Default::default()
-            },
-            SettingsUIRoot,
-            children![Self::button(
-                "Start",
-                font.clone(),
-                SettingsButtonAction::Start,
-                ButtonPosition {
-                    right: px(50),
-                    bottom: px(50),
-                }
-            )],
-        ));
+        commands
+            .spawn((
+                Name::new("Settings UI Root"),
+                Node {
+                    width: percent(100),
+                    height: percent(100),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    flex_direction: FlexDirection::Column,
+                    row_gap: px(50),
+                    ..Default::default()
+                },
+                SettingsUIRoot,
+                children![
+                    Self::button(
+                        "Start",
+                        font.clone(),
+                        SettingsButtonAction::Start,
+                        ButtonPosition {
+                            right: px(50),
+                            bottom: px(50),
+                        }
+                    ),
+                    Self::text_input(font.clone(), "20"),
+                    Self::text_input(font.clone(), "20"),
+                ],
+            ))
+            .observe(
+                |click: On<Pointer<Click>>,
+                 inputs: Query<(Entity, &mut TextInput, &mut BorderColor)>,
+                 texts: Query<&ChildOf, With<Text>>| {
+                    let original = click.original_event_target();
+                    for (entity, mut input, mut border) in inputs {
+                        if original == entity
+                            || texts
+                                .get(original)
+                                .is_ok_and(|parent| parent.parent() == entity)
+                        {
+                            input.focused = true;
+                            *border = BorderColor::all(GREEN);
+                        } else {
+                            input.focused = false;
+                            *border = BorderColor::all(Color::NONE);
+                        }
+                    }
+                },
+            );
 
         log::info!("Settings menu initialized");
     }
@@ -135,14 +164,42 @@ impl<T> SettingsPlugin<T> {
         )
     }
 
+    fn text_input(font: Handle<Font>, value: &str) -> impl Bundle {
+        (
+            Name::new("Text Input"),
+            Node {
+                width: px(150),
+                padding: px(6).all(),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                border: px(4).all(),
+                ..Default::default()
+            },
+            BackgroundColor(Color::from(GRAY)),
+            TextInput {
+                value: value.into(),
+                ..Default::default()
+            },
+            children![(
+                Text::new(value),
+                TextFont {
+                    font: font.clone(),
+                    font_size: 24.0,
+                    ..default()
+                },
+                TextColor(Color::WHITE),
+            )],
+        )
+    }
+
     fn menu_action(
-        mut interaction_query: Query<
+        interaction_query: Query<
             (&Interaction, &SettingsButtonAction),
             (Changed<Interaction>, With<Button>),
         >,
         mut create_game: MessageWriter<CreateGameEvent>,
     ) {
-        for (interaction, action) in &mut interaction_query {
+        for (interaction, action) in interaction_query {
             if *interaction == Interaction::Pressed {
                 match action {
                     SettingsButtonAction::Start => {
