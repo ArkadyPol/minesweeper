@@ -13,6 +13,7 @@ pub fn trigger_event_handler(event: On<TileTriggerEvent>, mut commands: Commands
 pub fn uncover_tiles(
     mut commands: Commands,
     children: Query<(Entity, &ChildOf), With<Uncover>>,
+    children_query: Query<&Children>,
     parents: Query<(&Neighbors, Option<&Bomb>, Option<&BombNeighbor>)>,
     cover_query: Query<(), (With<TileCover>, Without<Uncover>)>,
     board_options: Option<Res<BoardOptions>>,
@@ -51,20 +52,11 @@ pub fn uncover_tiles(
             // .. We propagate the uncovering by adding the `Uncover` component to adjacent tiles
             // which will then be removed next frame
             for neighbor_entity in neighbors.neighbors.iter().flatten() {
-                commands.trigger(PropagateUncoverEvent(*neighbor_entity));
+                commands.trigger(PropagateUncoverEvent::new(
+                    *neighbor_entity,
+                    &children_query,
+                ));
             }
-        }
-    }
-}
-
-pub fn propagate_uncover_handler(
-    event: On<PropagateUncoverEvent>,
-    children: Query<&Children>,
-    mut commands: Commands,
-) {
-    if let Ok(children) = children.get(event.0) {
-        for child in children {
-            commands.trigger(PropagateUncoverEvent(*child));
         }
     }
 }
@@ -74,7 +66,7 @@ pub fn on_uncover_handler(
     cover_query: Query<(), (With<TileCover>, Without<Uncover>)>,
     mut commands: Commands,
 ) {
-    if cover_query.get(event.0).is_ok() {
-        commands.entity(event.0).insert(Uncover);
+    if cover_query.get(event.entity).is_ok() {
+        commands.entity(event.entity).insert(Uncover);
     }
 }
