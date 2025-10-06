@@ -4,6 +4,7 @@ pub mod resources;
 
 use bevy::{
     color::palettes::css::{DARK_GRAY, DARK_GREEN, GRAY, GREEN},
+    input::keyboard::Key,
     log,
     prelude::*,
 };
@@ -32,8 +33,10 @@ impl<T: States> Plugin for SettingsPlugin<T> {
         )
         .add_systems(
             Update,
-            (Self::change_background_color, Self::menu_action)
-                .chain()
+            (
+                (Self::change_background_color, Self::menu_action).chain(),
+                Self::keyboard_handler,
+            )
                 .run_if(in_state(self.running_state.clone())),
         )
         .add_systems(OnExit(self.running_state.clone()), Self::cleanup_menu);
@@ -71,26 +74,7 @@ impl<T> SettingsPlugin<T> {
                     Self::text_input(font.clone(), "20"),
                 ],
             ))
-            .observe(
-                |click: On<Pointer<Click>>,
-                 inputs: Query<(Entity, &mut TextInput, &mut BorderColor)>,
-                 texts: Query<&ChildOf, With<Text>>| {
-                    let original = click.original_event_target();
-                    for (entity, mut input, mut border) in inputs {
-                        if original == entity
-                            || texts
-                                .get(original)
-                                .is_ok_and(|parent| parent.parent() == entity)
-                        {
-                            input.focused = true;
-                            *border = BorderColor::all(GREEN);
-                        } else {
-                            input.focused = false;
-                            *border = BorderColor::all(Color::NONE);
-                        }
-                    }
-                },
-            );
+            .observe(focus_handler);
 
         log::info!("Settings menu initialized");
     }
@@ -245,5 +229,59 @@ impl<T> SettingsPlugin<T> {
             to_string_pretty(&board_options.into_inner(), PrettyConfig::default()).unwrap(),
         )
         .expect("Error saving settings");
+    }
+
+    fn keyboard_handler(
+        inputs: Query<(&mut TextInput, &Children)>,
+        keys: Res<ButtonInput<Key>>,
+        mut text_query: Query<&mut Text>,
+    ) {
+        for (mut input, children) in inputs {
+            if !input.focused {
+                continue;
+            }
+
+            let text_entity = children
+                .iter()
+                .find(|child| text_query.get(*child).is_ok())
+                .unwrap();
+
+            let mut text = text_query.get_mut(text_entity).unwrap();
+
+            for key in keys.get_just_pressed() {
+                if let Key::Character(s) = key {
+                    for c in s.chars() {
+                        if c.is_ascii_digit() || c == '.' {
+                            input.value.push(c);
+                            text.push(c);
+                        }
+                    }
+                } else if *key == Key::Backspace {
+                    input.value.pop();
+                    text.pop();
+                }
+            }
+        }
+    }
+}
+
+fn focus_handler(
+    click: On<Pointer<Click>>,
+    inputs: Query<(Entity, &mut TextInput, &mut BorderColor)>,
+    texts: Query<&ChildOf, With<Text>>,
+) {
+    let original = click.original_event_target();
+    for (entity, mut input, mut border) in inputs {
+        if original == entity
+            || texts
+                .get(original)
+                .is_ok_and(|parent| parent.parent() == entity)
+        {
+            input.focused = true;
+            *border = BorderColor::all(GREEN);
+        } else {
+            input.focused = false;
+            *border = BorderColor::all(Color::NONE);
+        }
     }
 }
