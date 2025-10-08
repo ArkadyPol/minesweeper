@@ -104,6 +104,7 @@ pub struct TextInput {
     pub value: InputValue,
     pub focused: bool,
     pub cursor_pos: usize,
+    pub is_cursor_inserted: bool,
 }
 
 impl Default for TextInput {
@@ -112,6 +113,7 @@ impl Default for TextInput {
             value: InputValue::Str("".into()),
             focused: false,
             cursor_pos: 0,
+            is_cursor_inserted: false,
         }
     }
 }

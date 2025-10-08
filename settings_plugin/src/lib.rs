@@ -35,6 +35,7 @@ impl<T: States> Plugin for SettingsPlugin<T> {
             (
                 (Self::change_background_color, Self::menu_action).chain(),
                 Self::keyboard_handler,
+                Self::in_focus_cursor,
             )
                 .run_if(in_state(self.running_state.clone())),
         )
@@ -241,12 +242,12 @@ impl<T> SettingsPlugin<T> {
     }
 
     fn keyboard_handler(
-        inputs: Query<(Entity, &TextInput, &Children)>,
+        inputs: Query<(Entity, &mut TextInput, &Children)>,
         keys: Res<ButtonInput<Key>>,
         mut text_query: Query<&mut Text>,
         mut commands: Commands,
     ) {
-        for (entity, input, children) in inputs {
+        for (entity, mut input, children) in inputs {
             if !input.focused {
                 continue;
             }
@@ -255,24 +256,95 @@ impl<T> SettingsPlugin<T> {
             let mut text = text_query.get_mut(text_entity).unwrap();
 
             for key in keys.get_just_pressed() {
+                let mut chars: Vec<char> = text.0.chars().collect();
+
+                if !input.is_cursor_inserted {
+                    chars.insert(input.cursor_pos, '|');
+                    input.is_cursor_inserted = true;
+                }
+
                 match key {
                     Key::Character(s) => {
                         for c in s.chars() {
-                            text.push(c);
+                            chars.insert(input.cursor_pos, c);
+                            input.cursor_pos += 1;
+                        }
+                    }
+                    Key::Space => {
+                        chars.insert(input.cursor_pos, ' ');
+                        input.cursor_pos += 1;
+                    }
+                    Key::ArrowLeft => {
+                        if input.cursor_pos > 0 {
+                            chars.remove(input.cursor_pos);
+                            chars.insert(input.cursor_pos - 1, '|');
+                            input.cursor_pos -= 1;
+                        }
+                    }
+                    Key::ArrowRight => {
+                        if input.cursor_pos < chars.len() - 1 {
+                            chars.remove(input.cursor_pos);
+                            chars.insert(input.cursor_pos + 1, '|');
+                            input.cursor_pos += 1;
                         }
                     }
                     Key::Backspace => {
-                        text.pop();
+                        if input.cursor_pos > 0 {
+                            chars.remove(input.cursor_pos - 1);
+                            input.cursor_pos -= 1;
+                        }
                     }
-                    Key::Space => {
-                        text.push(' ');
+                    Key::Delete => {
+                        if input.cursor_pos < chars.len() - 1 {
+                            chars.remove(input.cursor_pos);
+                        }
                     }
                     Key::Enter => {
                         commands.trigger(LostFocusEvent(entity));
                     }
                     _ => {}
                 }
+
+                text.0 = chars.into_iter().collect();
             }
+        }
+    }
+
+    fn in_focus_cursor(
+        inputs: Query<(&mut TextInput, &Children)>,
+        mut text_query: Query<&mut Text>,
+        mut timer: Local<Option<Timer>>,
+        time: Res<Time>,
+    ) {
+        if timer.is_none() {
+            *timer = Some(Timer::from_seconds(0.4, TimerMode::Repeating))
+        }
+
+        let timer = timer.as_mut().unwrap();
+
+        timer.tick(time.delta());
+
+        if !timer.just_finished() {
+            return;
+        }
+
+        for (mut input, children) in inputs {
+            if !input.focused {
+                continue;
+            }
+            let text_entity = find_text_child_entity(children, &text_query);
+            let mut text = text_query.get_mut(text_entity).unwrap();
+            let mut chars: Vec<char> = text.0.chars().collect();
+
+            if input.is_cursor_inserted {
+                chars.remove(input.cursor_pos);
+            } else {
+                chars.insert(input.cursor_pos, '|');
+            }
+
+            text.0 = chars.into_iter().collect();
+
+            input.is_cursor_inserted = !input.is_cursor_inserted;
         }
     }
 }
@@ -312,9 +384,18 @@ fn on_lost_focus_handler(
     let text_entity = find_text_child_entity(children, &text_query);
     let mut text = text_query.get_mut(text_entity).unwrap();
 
+    if input.is_cursor_inserted {
+        let mut chars: Vec<char> = text.0.chars().collect();
+        chars.remove(input.cursor_pos);
+        input.is_cursor_inserted = false;
+        text.0 = chars.into_iter().collect();
+    }
+
     if let Err(err) = input.value.parse_and_mut(&text.0) {
         log::error!("{}", err);
         text.0 = input.value.as_string();
+        let chars: Vec<char> = text.0.chars().collect();
+        input.cursor_pos = input.cursor_pos.min(chars.len());
     }
 }
 
