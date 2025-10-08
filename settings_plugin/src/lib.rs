@@ -1,4 +1,4 @@
-mod components;
+pub mod components;
 pub mod events;
 pub mod resources;
 
@@ -11,9 +11,8 @@ use bevy::{
 use ron::ser::{PrettyConfig, to_string_pretty};
 use std::fs;
 
-use components::TextInput;
-use components::{SettingsButtonAction, SettingsUIRoot};
-use events::CreateGameEvent;
+use components::{InputValue, SettingsButtonAction, SettingsUIRoot, TextInput};
+use events::{CreateGameEvent, LostFocusEvent};
 use resources::{BoardAssets, BoardOptions, SpriteMaterial};
 
 pub struct SettingsPlugin<T> {
@@ -47,6 +46,11 @@ impl<T: States> Plugin for SettingsPlugin<T> {
 impl<T> SettingsPlugin<T> {
     fn create_menu(mut commands: Commands, asset_server: Res<AssetServer>) {
         let font: Handle<Font> = asset_server.load("fonts/FiraSans-Bold.ttf");
+        let inputs = vec![
+            Self::text_input(font.clone(), 20.1f32, &mut commands),
+            Self::text_input(font.clone(), 20, &mut commands),
+            Self::text_input(font.clone(), "abc".to_string(), &mut commands),
+        ];
         commands
             .spawn((
                 Name::new("Settings UI Root"),
@@ -60,21 +64,18 @@ impl<T> SettingsPlugin<T> {
                     ..Default::default()
                 },
                 SettingsUIRoot,
-                children![
-                    Self::button(
-                        "Start",
-                        font.clone(),
-                        SettingsButtonAction::Start,
-                        ButtonPosition {
-                            right: px(50),
-                            bottom: px(50),
-                        }
-                    ),
-                    Self::text_input(font.clone(), "20"),
-                    Self::text_input(font.clone(), "20"),
-                ],
+                children![Self::button(
+                    "Start",
+                    font.clone(),
+                    SettingsButtonAction::Start,
+                    ButtonPosition {
+                        right: px(50),
+                        bottom: px(50),
+                    }
+                ),],
             ))
-            .observe(focus_handler);
+            .observe(focus_handler)
+            .add_children(&inputs);
 
         log::info!("Settings menu initialized");
     }
@@ -148,32 +149,40 @@ impl<T> SettingsPlugin<T> {
         )
     }
 
-    fn text_input(font: Handle<Font>, value: &str) -> impl Bundle {
-        (
-            Name::new("Text Input"),
-            Node {
-                width: px(150),
-                padding: px(6).all(),
-                align_items: AlignItems::Center,
-                justify_content: JustifyContent::Center,
-                border: px(4).all(),
-                ..Default::default()
-            },
-            BackgroundColor(Color::from(GRAY)),
-            TextInput {
-                value: value.into(),
-                ..Default::default()
-            },
-            children![(
-                Text::new(value),
-                TextFont {
-                    font: font.clone(),
-                    font_size: 24.0,
-                    ..default()
+    fn text_input(
+        font: Handle<Font>,
+        value: impl Into<InputValue>,
+        commands: &mut Commands,
+    ) -> Entity {
+        let value: InputValue = value.into();
+        commands
+            .spawn((
+                Name::new("Text Input"),
+                Node {
+                    width: px(150),
+                    padding: px(6).all(),
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::Center,
+                    border: px(4).all(),
+                    ..Default::default()
                 },
-                TextColor(Color::WHITE),
-            )],
-        )
+                BackgroundColor(Color::from(GRAY)),
+                TextInput {
+                    value: value.clone(),
+                    ..Default::default()
+                },
+                children![(
+                    Text::new(value),
+                    TextFont {
+                        font: font.clone(),
+                        font_size: 24.0,
+                        ..default()
+                    },
+                    TextColor(Color::WHITE),
+                )],
+            ))
+            .observe(on_lost_focus_handler)
+            .id()
     }
 
     fn menu_action(
@@ -232,33 +241,36 @@ impl<T> SettingsPlugin<T> {
     }
 
     fn keyboard_handler(
-        inputs: Query<(&mut TextInput, &Children)>,
+        inputs: Query<(Entity, &TextInput, &Children)>,
         keys: Res<ButtonInput<Key>>,
         mut text_query: Query<&mut Text>,
+        mut commands: Commands,
     ) {
-        for (mut input, children) in inputs {
+        for (entity, input, children) in inputs {
             if !input.focused {
                 continue;
             }
 
-            let text_entity = children
-                .iter()
-                .find(|child| text_query.get(*child).is_ok())
-                .unwrap();
-
+            let text_entity = find_text_child_entity(children, &text_query);
             let mut text = text_query.get_mut(text_entity).unwrap();
 
             for key in keys.get_just_pressed() {
-                if let Key::Character(s) = key {
-                    for c in s.chars() {
-                        if c.is_ascii_digit() || c == '.' {
-                            input.value.push(c);
+                match key {
+                    Key::Character(s) => {
+                        for c in s.chars() {
                             text.push(c);
                         }
                     }
-                } else if *key == Key::Backspace {
-                    input.value.pop();
-                    text.pop();
+                    Key::Backspace => {
+                        text.pop();
+                    }
+                    Key::Space => {
+                        text.push(' ');
+                    }
+                    Key::Enter => {
+                        commands.trigger(LostFocusEvent(entity));
+                    }
+                    _ => {}
                 }
             }
         }
@@ -269,6 +281,7 @@ fn focus_handler(
     click: On<Pointer<Click>>,
     inputs: Query<(Entity, &mut TextInput, &mut BorderColor)>,
     texts: Query<&ChildOf, With<Text>>,
+    mut commands: Commands,
 ) {
     let original = click.original_event_target();
     for (entity, mut input, mut border) in inputs {
@@ -280,8 +293,34 @@ fn focus_handler(
             input.focused = true;
             *border = BorderColor::all(GREEN);
         } else {
-            input.focused = false;
-            *border = BorderColor::all(Color::NONE);
+            if input.focused == true {
+                commands.trigger(LostFocusEvent(entity));
+            }
         }
     }
+}
+
+fn on_lost_focus_handler(
+    event: On<LostFocusEvent>,
+    mut inputs: Query<(&mut TextInput, &Children, &mut BorderColor)>,
+    mut text_query: Query<&mut Text>,
+) {
+    let (mut input, children, mut border) = inputs.get_mut(event.0).unwrap();
+    input.focused = false;
+    *border = BorderColor::all(Color::NONE);
+
+    let text_entity = find_text_child_entity(children, &text_query);
+    let mut text = text_query.get_mut(text_entity).unwrap();
+
+    if let Err(err) = input.value.parse_and_mut(&text.0) {
+        log::error!("{}", err);
+        text.0 = input.value.as_string();
+    }
+}
+
+fn find_text_child_entity(children: &Children, text_query: &Query<&mut Text>) -> Entity {
+    children
+        .iter()
+        .find(|child| text_query.get(*child).is_ok())
+        .expect("TextInput must have a Text child")
 }
