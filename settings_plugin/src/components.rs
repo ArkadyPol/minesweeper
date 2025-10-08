@@ -3,7 +3,7 @@ use std::{
     num::{ParseFloatError, ParseIntError},
 };
 
-use bevy::prelude::Component;
+use bevy::prelude::*;
 
 #[derive(Component)]
 pub struct SettingsUIRoot;
@@ -115,5 +115,14 @@ impl Default for TextInput {
             cursor_pos: 0,
             is_cursor_inserted: false,
         }
+    }
+}
+
+#[derive(Debug, Clone, Component)]
+pub struct CursorTimer(pub Timer);
+
+impl Default for CursorTimer {
+    fn default() -> Self {
+        Self(Timer::from_seconds(0.5, TimerMode::Repeating))
     }
 }

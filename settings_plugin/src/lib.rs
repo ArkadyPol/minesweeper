@@ -11,7 +11,7 @@ use bevy::{
 use ron::ser::{PrettyConfig, to_string_pretty};
 use std::fs;
 
-use components::{InputValue, SettingsButtonAction, SettingsUIRoot, TextInput};
+use components::{CursorTimer, InputValue, SettingsButtonAction, SettingsUIRoot, TextInput};
 use events::{CreateGameEvent, LostFocusEvent};
 use resources::{BoardAssets, BoardOptions, SpriteMaterial};
 
@@ -65,6 +65,7 @@ impl<T> SettingsPlugin<T> {
                     ..Default::default()
                 },
                 SettingsUIRoot,
+                CursorTimer::default(),
                 children![Self::button(
                     "Start",
                     font.clone(),
@@ -246,7 +247,10 @@ impl<T> SettingsPlugin<T> {
         keys: Res<ButtonInput<Key>>,
         mut text_query: Query<&mut Text>,
         mut commands: Commands,
+        mut timer: Query<&mut CursorTimer, With<SettingsUIRoot>>,
     ) {
+        let mut timer = timer.single_mut().unwrap();
+
         for (entity, mut input, children) in inputs {
             if !input.focused {
                 continue;
@@ -256,6 +260,8 @@ impl<T> SettingsPlugin<T> {
             let mut text = text_query.get_mut(text_entity).unwrap();
 
             for key in keys.get_just_pressed() {
+                timer.0.reset();
+
                 let mut chars: Vec<char> = text.0.chars().collect();
 
                 if !input.is_cursor_inserted {
@@ -313,18 +319,14 @@ impl<T> SettingsPlugin<T> {
     fn in_focus_cursor(
         inputs: Query<(&mut TextInput, &Children)>,
         mut text_query: Query<&mut Text>,
-        mut timer: Local<Option<Timer>>,
+        mut timer: Query<&mut CursorTimer, With<SettingsUIRoot>>,
         time: Res<Time>,
     ) {
-        if timer.is_none() {
-            *timer = Some(Timer::from_seconds(0.4, TimerMode::Repeating))
-        }
+        let mut timer = timer.single_mut().unwrap();
 
-        let timer = timer.as_mut().unwrap();
+        timer.0.tick(time.delta());
 
-        timer.tick(time.delta());
-
-        if !timer.just_finished() {
+        if !timer.0.just_finished() {
             return;
         }
 
