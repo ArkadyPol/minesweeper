@@ -7,12 +7,13 @@ use bevy::{
     input::keyboard::Key,
     log,
     prelude::*,
+    text::ComputedTextBlock,
 };
 use ron::ser::{PrettyConfig, to_string_pretty};
 use std::fs;
 
 use components::{CursorTimer, InputValue, SettingsButtonAction, SettingsUIRoot, TextInput};
-use events::{CreateGameEvent, LostFocusEvent};
+use events::{CreateGameEvent, LostFocusEvent, SetCursorPosEvent};
 use resources::{BoardAssets, BoardOptions, SpriteMaterial};
 
 pub struct SettingsPlugin<T> {
@@ -157,6 +158,20 @@ impl<T> SettingsPlugin<T> {
         commands: &mut Commands,
     ) -> Entity {
         let value: InputValue = value.into();
+
+        let text_child = commands
+            .spawn((
+                Text::new(value.clone()),
+                TextFont {
+                    font: font.clone(),
+                    font_size: 24.0,
+                    ..default()
+                },
+                TextColor(Color::WHITE),
+            ))
+            .observe(on_click_text)
+            .id();
+
         commands
             .spawn((
                 Name::new("Text Input"),
@@ -170,20 +185,13 @@ impl<T> SettingsPlugin<T> {
                 },
                 BackgroundColor(Color::from(GRAY)),
                 TextInput {
-                    value: value.clone(),
+                    value,
                     ..Default::default()
                 },
-                children![(
-                    Text::new(value),
-                    TextFont {
-                        font: font.clone(),
-                        font_size: 24.0,
-                        ..default()
-                    },
-                    TextColor(Color::WHITE),
-                )],
             ))
+            .add_child(text_child)
             .observe(on_lost_focus_handler)
+            .observe(on_set_cursor_pos)
             .id()
     }
 
@@ -399,6 +407,69 @@ fn on_lost_focus_handler(
         let chars: Vec<char> = text.0.chars().collect();
         input.cursor_pos = input.cursor_pos.min(chars.len());
     }
+}
+
+fn on_click_text(
+    click: On<Pointer<Click>>,
+    text_query: Query<(&ChildOf, &Text, &ComputedTextBlock)>,
+    mut commands: Commands,
+) {
+    let (parent, text, computed_text) = text_query.get(click.entity).unwrap();
+    let buffer = computed_text.buffer();
+    if let Some(position) = click.hit.position {
+        if let (Some(x), Some(y)) = buffer.size() {
+            let local_x = (position.x + 0.5) * x;
+            let local_y = (position.y + 0.5) * y;
+
+            if let Some(cursor) = buffer.hit(local_x, local_y) {
+                let cursor_pos = text
+                    .0
+                    .char_indices()
+                    .position(|(b, _)| b == cursor.index)
+                    .unwrap_or_else(|| text.0.chars().count());
+
+                log::info!(
+                    "local {:?} cursor {:?} cursor_pos {}",
+                    (local_x, local_y),
+                    cursor,
+                    cursor_pos
+                );
+
+                commands.trigger(SetCursorPosEvent {
+                    entity: parent.parent(),
+                    cursor_pos,
+                });
+            }
+        }
+    }
+}
+
+fn on_set_cursor_pos(
+    event: On<SetCursorPosEvent>,
+    mut inputs: Query<(&mut TextInput, &Children)>,
+    mut text_query: Query<&mut Text>,
+    mut timer: Query<&mut CursorTimer, With<SettingsUIRoot>>,
+) {
+    let (mut input, children) = inputs.get_mut(event.entity).unwrap();
+
+    let mut timer = timer.single_mut().unwrap();
+    timer.0.reset();
+
+    let text_entity = find_text_child_entity(children, &text_query);
+    let mut text = text_query.get_mut(text_entity).unwrap();
+
+    let mut chars: Vec<char> = text.0.chars().collect();
+
+    if input.is_cursor_inserted {
+        chars.remove(input.cursor_pos);
+    }
+
+    let new_pos = event.cursor_pos.min(chars.len());
+    chars.insert(new_pos, '|');
+    input.cursor_pos = new_pos;
+    input.is_cursor_inserted = true;
+
+    text.0 = chars.into_iter().collect();
 }
 
 fn find_text_child_entity(children: &Children, text_query: &Query<&mut Text>) -> Entity {
