@@ -4,6 +4,7 @@ pub mod resources;
 
 use bevy::{
     color::palettes::css::{DARK_GRAY, DARK_GREEN, GRAY, GREEN},
+    ecs::relationship::RelatedSpawner,
     input::keyboard::Key,
     log,
     prelude::*,
@@ -48,11 +49,7 @@ impl<T: States> Plugin for SettingsPlugin<T> {
 impl<T> SettingsPlugin<T> {
     fn create_menu(mut commands: Commands, asset_server: Res<AssetServer>) {
         let font: Handle<Font> = asset_server.load("fonts/FiraSans-Bold.ttf");
-        let inputs = vec![
-            Self::text_input(font.clone(), 20.1f32, &mut commands),
-            Self::text_input(font.clone(), 20, &mut commands),
-            Self::text_input(font.clone(), "abc".to_string(), &mut commands),
-        ];
+
         commands
             .spawn((
                 Name::new("Settings UI Root"),
@@ -67,18 +64,32 @@ impl<T> SettingsPlugin<T> {
                 },
                 SettingsUIRoot,
                 CursorTimer::default(),
-                children![Self::button(
-                    "Start",
-                    font.clone(),
-                    SettingsButtonAction::Start,
-                    ButtonPosition {
-                        right: px(50),
-                        bottom: px(50),
-                    }
-                ),],
+                children![
+                    Self::button(
+                        "Start",
+                        font.clone(),
+                        SettingsButtonAction::Start,
+                        ButtonPosition {
+                            right: px(50),
+                            bottom: px(50),
+                        },
+                    ),
+                    (
+                        Node {
+                            width: percent(100),
+                            flex_direction: FlexDirection::Row,
+                            align_items: AlignItems::Center,
+                            justify_content: JustifyContent::SpaceEvenly,
+                            ..Default::default()
+                        },
+                        Children::spawn(SpawnWith(move |parent: &mut RelatedSpawner<ChildOf>| {
+                            Self::text_input(parent, font.clone(), 20);
+                            Self::text_input(parent, font.clone(), 20);
+                        })),
+                    )
+                ],
             ))
-            .observe(focus_handler)
-            .add_children(&inputs);
+            .observe(focus_handler);
 
         log::info!("Settings menu initialized");
     }
@@ -153,26 +164,13 @@ impl<T> SettingsPlugin<T> {
     }
 
     fn text_input(
+        parent: &mut RelatedSpawner<ChildOf>,
         font: Handle<Font>,
         value: impl Into<InputValue>,
-        commands: &mut Commands,
-    ) -> Entity {
+    ) {
         let value: InputValue = value.into();
 
-        let text_child = commands
-            .spawn((
-                Text::new(value.clone()),
-                TextFont {
-                    font: font.clone(),
-                    font_size: 24.0,
-                    ..default()
-                },
-                TextColor(Color::WHITE),
-            ))
-            .observe(on_click_text)
-            .id();
-
-        commands
+        parent
             .spawn((
                 Name::new("Text Input"),
                 Node {
@@ -185,14 +183,25 @@ impl<T> SettingsPlugin<T> {
                 },
                 BackgroundColor(Color::from(GRAY)),
                 TextInput {
-                    value,
+                    value: value.clone(),
                     ..Default::default()
                 },
+                Children::spawn(SpawnWith(move |parent: &mut RelatedSpawner<ChildOf>| {
+                    parent
+                        .spawn((
+                            Text::new(value),
+                            TextFont {
+                                font: font.clone(),
+                                font_size: 24.0,
+                                ..default()
+                            },
+                            TextColor(Color::WHITE),
+                        ))
+                        .observe(on_click_text);
+                })),
             ))
-            .add_child(text_child)
             .observe(on_lost_focus_handler)
-            .observe(on_set_cursor_pos)
-            .id()
+            .observe(on_set_cursor_pos);
     }
 
     fn menu_action(
