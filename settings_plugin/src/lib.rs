@@ -14,7 +14,7 @@ use ron::ser::{PrettyConfig, to_string_pretty};
 use std::fs;
 
 use components::{CursorTimer, InputValue, SettingsButtonAction, SettingsUIRoot, TextInput};
-use events::{CreateGameEvent, LostFocusEvent, SetCursorPosEvent};
+use events::{BackOriginalInput, ChangeInput, CreateGameEvent, LostFocusEvent, SetCursorPosEvent};
 use resources::{BoardAssets, BoardOptions, SpriteMaterial};
 
 pub struct SettingsPlugin<T> {
@@ -47,8 +47,16 @@ impl<T: States> Plugin for SettingsPlugin<T> {
 }
 
 impl<T> SettingsPlugin<T> {
-    fn create_menu(mut commands: Commands, asset_server: Res<AssetServer>) {
+    fn create_menu(
+        mut commands: Commands,
+        asset_server: Res<AssetServer>,
+        board: Res<BoardOptions>,
+    ) {
         let font: Handle<Font> = asset_server.load("fonts/FiraSans-Bold.ttf");
+        let font_2 = font.clone();
+
+        let map_size_x = board.map_size.0;
+        let map_size_y = board.map_size.1;
 
         commands
             .spawn((
@@ -60,7 +68,7 @@ impl<T> SettingsPlugin<T> {
                     align_items: AlignItems::Center,
                     flex_direction: FlexDirection::Column,
                     row_gap: px(50),
-                    ..Default::default()
+                    ..default()
                 },
                 SettingsUIRoot,
                 CursorTimer::default(),
@@ -76,20 +84,54 @@ impl<T> SettingsPlugin<T> {
                     ),
                     (
                         Node {
-                            width: percent(100),
+                            width: percent(100.0),
                             flex_direction: FlexDirection::Row,
                             align_items: AlignItems::Center,
                             justify_content: JustifyContent::SpaceEvenly,
-                            ..Default::default()
+                            column_gap: px(16),
+                            ..default()
                         },
-                        Children::spawn(SpawnWith(move |parent: &mut RelatedSpawner<ChildOf>| {
-                            Self::text_input(parent, font.clone(), 20);
-                            Self::text_input(parent, font.clone(), 20);
-                        })),
+                        Children::spawn(SpawnWith(move |row: &mut RelatedSpawner<ChildOf>| {
+                            // Map size
+                            row.spawn(Self::label(font.clone(), "Map size"));
+                            // Width
+                            row.spawn((
+                                Node {
+                                    flex_direction: FlexDirection::Row,
+                                    align_items: AlignItems::Center,
+                                    column_gap: px(8),
+                                    ..default()
+                                },
+                                Children::spawn(SpawnWith(
+                                    move |sub: &mut RelatedSpawner<ChildOf>| {
+                                        sub.spawn(Self::label(font.clone(), "Width"));
+                                        Self::text_input(sub, font.clone(), map_size_x as i32);
+                                    },
+                                )),
+                            ))
+                            .observe(on_change_input);
+                            // Height
+                            row.spawn((
+                                Node {
+                                    flex_direction: FlexDirection::Row,
+                                    align_items: AlignItems::Center,
+                                    column_gap: px(8),
+                                    ..default()
+                                },
+                                Children::spawn(SpawnWith(
+                                    move |sub: &mut RelatedSpawner<ChildOf>| {
+                                        sub.spawn(Self::label(font_2.clone(), "Height"));
+                                        Self::text_input(sub, font_2.clone(), map_size_y as i32);
+                                    },
+                                )),
+                            ))
+                            .observe(on_change_input);
+                        }))
                     )
                 ],
             ))
-            .observe(focus_handler);
+            .observe(focus_handler)
+            .observe(on_change_labeled_input);
 
         log::info!("Settings menu initialized");
     }
@@ -101,22 +143,22 @@ impl<T> SettingsPlugin<T> {
 
         log::info!("{:?}", board_options);
 
-        commands.insert_resource(board_options.clone());
+        commands.insert_resource(board_options);
 
         // Board assets
         commands.insert_resource(BoardAssets {
             label: "Default".to_string(),
             board_material: SpriteMaterial {
                 color: Color::WHITE,
-                ..Default::default()
+                ..default()
             },
             tile_material: SpriteMaterial {
                 color: Color::from(DARK_GRAY),
-                ..Default::default()
+                ..default()
             },
             covered_tile_material: SpriteMaterial {
                 color: Color::from(GRAY),
-                ..Default::default()
+                ..default()
             },
             bomb_counter_font: asset_server.load("fonts/pixeled.ttf"),
             bomb_counter_colors: BoardAssets::default_colors(),
@@ -146,7 +188,7 @@ impl<T> SettingsPlugin<T> {
                 right: button_position.right,
                 bottom: button_position.bottom,
                 position_type: PositionType::Absolute,
-                ..Default::default()
+                ..default()
             },
             BackgroundColor(Color::from(GRAY)),
             Button,
@@ -179,29 +221,22 @@ impl<T> SettingsPlugin<T> {
                     align_items: AlignItems::Center,
                     justify_content: JustifyContent::Center,
                     border: px(4).all(),
-                    ..Default::default()
+                    ..default()
                 },
                 BackgroundColor(Color::from(GRAY)),
                 TextInput {
                     value: value.clone(),
-                    ..Default::default()
+                    ..default()
                 },
                 Children::spawn(SpawnWith(move |parent: &mut RelatedSpawner<ChildOf>| {
                     parent
-                        .spawn((
-                            Text::new(value),
-                            TextFont {
-                                font: font.clone(),
-                                font_size: 24.0,
-                                ..default()
-                            },
-                            TextColor(Color::WHITE),
-                        ))
+                        .spawn(Self::ui_text(font.clone(), value))
                         .observe(on_click_text);
                 })),
             ))
             .observe(on_lost_focus_handler)
-            .observe(on_set_cursor_pos);
+            .observe(on_set_cursor_pos)
+            .observe(on_back_original_input);
     }
 
     fn menu_action(
@@ -366,6 +401,26 @@ impl<T> SettingsPlugin<T> {
             input.is_cursor_inserted = !input.is_cursor_inserted;
         }
     }
+
+    fn ui_text(font: Handle<Font>, value: impl Into<String>) -> impl Bundle {
+        (
+            Text::new(value),
+            TextFont {
+                font: font.clone(),
+                font_size: 24.0,
+                ..default()
+            },
+            TextColor(Color::WHITE),
+        )
+    }
+
+    fn label(font: Handle<Font>, value: impl Into<String> + Clone) -> impl Bundle {
+        (
+            Name::new(value.clone().into()),
+            Label,
+            Self::ui_text(font.clone(), value),
+        )
+    }
 }
 
 fn focus_handler(
@@ -395,6 +450,7 @@ fn on_lost_focus_handler(
     event: On<LostFocusEvent>,
     mut inputs: Query<(&mut TextInput, &Children, &mut BorderColor)>,
     mut text_query: Query<&mut Text>,
+    mut commands: Commands,
 ) {
     let (mut input, children, mut border) = inputs.get_mut(event.0).unwrap();
     input.focused = false;
@@ -415,7 +471,29 @@ fn on_lost_focus_handler(
         text.0 = input.value.as_string();
         let chars: Vec<char> = text.0.chars().collect();
         input.cursor_pos = input.cursor_pos.min(chars.len());
+    } else {
+        commands.trigger(ChangeInput {
+            entity: event.0,
+            value: input.value.clone(),
+            label: None,
+        });
     }
+}
+
+fn on_back_original_input(
+    event: On<BackOriginalInput>,
+    mut inputs: Query<(&mut TextInput, &Children)>,
+    mut text_query: Query<&mut Text>,
+) {
+    let (mut input, children) = inputs.get_mut(event.entity).unwrap();
+
+    let text_entity = find_text_child_entity(children, &text_query);
+    let mut text = text_query.get_mut(text_entity).unwrap();
+
+    input.value = event.value.clone();
+    text.0 = input.value.as_string();
+    let chars: Vec<char> = text.0.chars().collect();
+    input.cursor_pos = input.cursor_pos.min(chars.len());
 }
 
 fn on_click_text(
@@ -479,6 +557,66 @@ fn on_set_cursor_pos(
     input.is_cursor_inserted = true;
 
     text.0 = chars.into_iter().collect();
+}
+
+fn on_change_input(
+    mut change: On<ChangeInput>,
+    children_query: Query<&Children>,
+    label_query: Query<&Name, With<Label>>,
+) {
+    let children = children_query.get(change.entity).unwrap();
+    for &child in children {
+        if let Ok(name) = label_query.get(child) {
+            change.label = Some(name.into());
+        }
+    }
+}
+
+fn on_change_labeled_input(
+    change: On<ChangeInput>,
+    mut board: ResMut<BoardOptions>,
+    mut commands: Commands,
+) {
+    log::info!("{:?}", change.event());
+
+    let label = match &change.label {
+        Some(name) => name,
+        None => return,
+    };
+
+    let mut res = || {
+        match label.as_str() {
+            "Width" => {
+                if let InputValue::Int(val) = change.value {
+                    let width = u16::try_from(val).map_err(|e| e.to_string())?;
+                    return board.set_width(width);
+                }
+            }
+            "Height" => {
+                if let InputValue::Int(val) = change.value {
+                    let height = u16::try_from(val).map_err(|e| e.to_string())?;
+                    return board.set_height(height);
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    };
+
+    if let Err(err) = res() {
+        log::error!("{}", err);
+        let value = match label.as_str() {
+            "Width" => InputValue::from(board.map_size.0 as i32),
+            "Height" => InputValue::from(board.map_size.1 as i32),
+            _ => unreachable!(),
+        };
+        commands.trigger(BackOriginalInput {
+            entity: change.original_event_target(),
+            value,
+        })
+    }
+
+    log::info!("Updated BoardOptions: {:?}", *board);
 }
 
 fn find_text_child_entity(children: &Children, text_query: &Query<&mut Text>) -> Entity {

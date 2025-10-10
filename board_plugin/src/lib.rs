@@ -107,7 +107,7 @@ impl<T, U> BoardPlugin<T, U> {
                         color: board_assets.board_material.color,
                         custom_size: Some(board_size),
                         image: board_assets.board_material.texture.clone(),
-                        ..Default::default()
+                        ..default()
                     },
                     Transform::from_xyz(board_size.x / 2., board_size.y / 2., 0.),
                 ));
@@ -165,7 +165,7 @@ impl<T, U> BoardPlugin<T, U> {
             TextFont {
                 font: board_assets.bomb_counter_font.clone(),
                 font_size: size,
-                ..Default::default()
+                ..default()
             },
             TextColor(color),
             Transform::from_xyz(0., 0., 1.),
@@ -195,7 +195,7 @@ impl<T, U> BoardPlugin<T, U> {
                         color: board_assets.tile_material.color,
                         custom_size: Some(Vec2::splat(size - padding as f32)),
                         image: board_assets.tile_material.texture.clone(),
-                        ..Default::default()
+                        ..default()
                     },
                     Transform::from_xyz(
                         (x as f32 * size) + (size / 2.),
@@ -214,7 +214,7 @@ impl<T, U> BoardPlugin<T, U> {
                                 custom_size: Some(Vec2::splat(size - padding)),
                                 color: board_assets.covered_tile_material.color,
                                 image: board_assets.covered_tile_material.texture.clone(),
-                                ..Default::default()
+                                ..default()
                             },
                             Transform::from_xyz(0., 0., 2.),
                         ))
@@ -235,7 +235,7 @@ impl<T, U> BoardPlugin<T, U> {
                                     color: board_assets.bomb_material.color,
                                     image: board_assets.bomb_material.texture.clone(),
                                     custom_size: Some(Vec2::splat(size - padding)),
-                                    ..Default::default()
+                                    ..default()
                                 },
                                 Transform::from_xyz(0., 0., 1.),
                             ));

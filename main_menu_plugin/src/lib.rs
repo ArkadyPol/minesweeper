@@ -37,7 +37,7 @@ impl<T> MainMenuPlugin<T> {
                 height: Val::Percent(100.0),
                 justify_content: JustifyContent::Center,
                 align_items: AlignItems::Center,
-                ..Default::default()
+                ..default()
             },
             MenuUIRoot,
             children![(
@@ -45,7 +45,7 @@ impl<T> MainMenuPlugin<T> {
                     flex_direction: FlexDirection::Column,
                     align_items: AlignItems::Center,
                     row_gap: Val::Px(50.0),
-                    ..Default::default()
+                    ..default()
                 },
                 children![
                     Self::button("Start game", font.clone(), MenuButtonAction::StartGame),
@@ -64,7 +64,7 @@ impl<T> MainMenuPlugin<T> {
                 padding: UiRect::all(Val::Px(16.0)),
                 align_items: AlignItems::Center,
                 justify_content: JustifyContent::Center,
-                ..Default::default()
+                ..default()
             },
             BackgroundColor(Color::from(GRAY)),
             Button,

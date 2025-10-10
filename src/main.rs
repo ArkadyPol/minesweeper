@@ -40,13 +40,13 @@ fn main() {
         primary_window: Some(Window {
             title: "Mine Sweeper!".to_string(),
             resolution: (700, 800).into(),
-            ..Default::default()
+            ..default()
         }),
-        ..Default::default()
+        ..default()
     }));
     app.insert_resource(SpritePickingSettings {
         picking_mode: SpritePickingMode::BoundingBox,
-        ..Default::default()
+        ..default()
     });
     app.init_state::<AppState>();
     app.add_computed_state::<InGame>();

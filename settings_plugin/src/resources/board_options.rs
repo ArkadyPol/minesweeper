@@ -77,3 +77,58 @@ impl Default for BoardOptions {
         }
     }
 }
+
+impl BoardOptions {
+    pub fn set_width(&mut self, width: u16) -> Result<(), String> {
+        let area = Self::get_area(width, self.map_size.1)?;
+
+        if area < 4 {
+            return Err("Width too small!".into());
+        }
+
+        if area > 3600 {
+            return Err("Width too large!".into());
+        }
+
+        if area <= self.bomb_count {
+            return Err("The bombs don't fit area!".into());
+        }
+
+        self.map_size.0 = width;
+        Ok(())
+    }
+
+    pub fn set_height(&mut self, height: u16) -> Result<(), String> {
+        let area = Self::get_area(self.map_size.0, height)?;
+
+        if area < 4 {
+            return Err("Height too small!".into());
+        }
+
+        if area > 3600 {
+            return Err("Height too large!".into());
+        }
+
+        if area <= self.bomb_count {
+            return Err("The bombs don't fit area!".into());
+        }
+
+        self.map_size.1 = height;
+        Ok(())
+    }
+
+    pub fn set_bomb_count(&mut self, bombs: u16) -> Result<(), String> {
+        let area = Self::get_area(self.map_size.0, self.map_size.1)?;
+
+        if bombs >= area {
+            return Err("Too many bombs!".into());
+        }
+
+        self.bomb_count = bombs;
+        Ok(())
+    }
+
+    pub fn get_area(width: u16, height: u16) -> Result<u16, String> {
+        width.checked_mul(height).ok_or("Area is too big!".into())
+    }
+}
