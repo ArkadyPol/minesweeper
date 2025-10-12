@@ -131,4 +131,25 @@ impl BoardOptions {
     pub fn get_area(width: u16, height: u16) -> Result<u16, String> {
         width.checked_mul(height).ok_or("Area is too big!".into())
     }
+
+    pub fn set_tile_padding(&mut self, tile_padding: f32) -> Result<(), String> {
+        if tile_padding < 0.0 {
+            return Err("Tile padding must be positive!".into());
+        }
+        match self.tile_size {
+            TileSize::Fixed(v) => {
+                if tile_padding >= v {
+                    return Err("Tile padding is too big!".into());
+                }
+            }
+            TileSize::Adaptive { min: _, max } => {
+                if tile_padding >= max {
+                    return Err("Tile padding is too big!".into());
+                }
+            }
+        }
+
+        self.tile_padding = tile_padding;
+        Ok(())
+    }
 }

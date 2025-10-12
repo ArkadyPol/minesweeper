@@ -2,7 +2,7 @@ use bevy::{ecs::relationship::RelatedSpawner, prelude::*};
 
 use super::common::field;
 
-pub fn bombs_row(font: Handle<Font>, bomb_count: u16) -> impl Bundle {
+pub fn tile_padding_row(font: Handle<Font>, tile_padding: f32) -> impl Bundle {
     (
         Node {
             width: percent(100.0),
@@ -13,8 +13,8 @@ pub fn bombs_row(font: Handle<Font>, bomb_count: u16) -> impl Bundle {
             ..default()
         },
         Children::spawn(SpawnWith(move |row: &mut RelatedSpawner<ChildOf>| {
-            // Bombs
-            field(row, font.clone(), "Bombs", bomb_count as i32);
+            // Tile padding
+            field(row, font.clone(), "Tile padding", tile_padding);
         })),
     )
 }

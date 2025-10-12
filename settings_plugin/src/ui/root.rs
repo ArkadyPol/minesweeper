@@ -11,6 +11,7 @@ use super::{
     bombs_row::bombs_row,
     common::{ButtonPosition, button},
     map_size_row::map_size_row,
+    tile_padding_row::tile_padding_row,
 };
 
 pub fn create_menu(
@@ -35,6 +36,9 @@ pub fn create_menu(
             SettingsUIRoot,
             CursorTimer::default(),
             children![
+                map_size_row(font.clone(), board.map_size),
+                bombs_row(font.clone(), board.bomb_count),
+                tile_padding_row(font.clone(), board.tile_padding),
                 button(
                     "Start",
                     font.clone(),
@@ -42,29 +46,25 @@ pub fn create_menu(
                     ButtonPosition {
                         right: px(50),
                         bottom: px(50),
+                        ..default()
                     },
                 ),
-                map_size_row(font.clone(), board.map_size),
-                bombs_row(font.clone(), board.bomb_count),
+                button(
+                    "Back to Menu",
+                    font.clone(),
+                    SettingsButtonAction::BackToMenu,
+                    ButtonPosition {
+                        left: px(50),
+                        bottom: px(50),
+                        ..default()
+                    },
+                ),
             ],
         ))
         .observe(focus_handler)
         .observe(on_change_labeled_input);
 
     log::info!("Settings menu initialized");
-}
-
-pub fn on_change_input(
-    mut change: On<ChangeInput>,
-    children_query: Query<&Children>,
-    label_query: Query<&Name, With<Label>>,
-) {
-    let children = children_query.get(change.entity).unwrap();
-    for &child in children {
-        if let Ok(name) = label_query.get(child) {
-            change.label = Some(name.into());
-        }
-    }
 }
 
 fn focus_handler(
@@ -122,6 +122,11 @@ fn on_change_labeled_input(
                     return board.set_bomb_count(bombs);
                 }
             }
+            "Tile padding" => {
+                if let InputValue::Float(tile_padding) = change.value {
+                    return board.set_tile_padding(tile_padding);
+                }
+            }
             _ => {}
         }
         Ok(())
@@ -133,6 +138,7 @@ fn on_change_labeled_input(
             "Width" => InputValue::from(board.map_size.0 as i32),
             "Height" => InputValue::from(board.map_size.1 as i32),
             "Bombs" => InputValue::from(board.bomb_count as i32),
+            "Tile padding" => InputValue::from(board.tile_padding),
             _ => unreachable!(),
         };
         commands.trigger(BackOriginalInput {

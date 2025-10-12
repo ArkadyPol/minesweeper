@@ -3,11 +3,16 @@ use bevy::{
     prelude::*,
 };
 
-use crate::{components::SettingsButtonAction, events::CreateGameEvent};
+use crate::{
+    components::SettingsButtonAction,
+    events::{BackToMenuEvent, CreateGameEvent},
+};
 
+#[derive(Debug, Default)]
 pub struct ButtonPosition {
     pub right: Val,
     pub bottom: Val,
+    pub left: Val,
 }
 
 pub fn button(
@@ -22,6 +27,7 @@ pub fn button(
             padding: px(16).all(),
             align_items: AlignItems::Center,
             justify_content: JustifyContent::Center,
+            left: button_position.left,
             right: button_position.right,
             bottom: button_position.bottom,
             position_type: PositionType::Absolute,
@@ -48,12 +54,16 @@ pub fn menu_action(
         (Changed<Interaction>, With<Button>),
     >,
     mut create_game: MessageWriter<CreateGameEvent>,
+    mut back_to_menu: MessageWriter<BackToMenuEvent>,
 ) {
     for (interaction, action) in interaction_query {
         if *interaction == Interaction::Pressed {
             match action {
                 SettingsButtonAction::Start => {
                     create_game.write(CreateGameEvent);
+                }
+                SettingsButtonAction::BackToMenu => {
+                    back_to_menu.write(BackToMenuEvent);
                 }
             }
         }

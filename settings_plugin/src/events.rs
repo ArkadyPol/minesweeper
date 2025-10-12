@@ -4,6 +4,8 @@ use crate::input_value::InputValue;
 
 #[derive(Debug, Copy, Clone, Message)]
 pub struct CreateGameEvent;
+#[derive(Debug, Copy, Clone, Message)]
+pub struct BackToMenuEvent;
 #[derive(Debug, Copy, Clone, EntityEvent)]
 pub struct LostFocusEvent(pub Entity);
 #[derive(Debug, Copy, Clone, EntityEvent)]

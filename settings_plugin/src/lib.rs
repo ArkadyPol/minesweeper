@@ -13,7 +13,7 @@ use ron::ser::{PrettyConfig, to_string_pretty};
 use std::fs;
 
 use components::SettingsUIRoot;
-use events::CreateGameEvent;
+use events::{BackToMenuEvent, CreateGameEvent};
 use resources::{BoardAssets, BoardOptions, SpriteMaterial};
 use ui::{
     common::{change_background_color, in_focus_cursor, keyboard_handler, menu_action},
@@ -41,6 +41,7 @@ impl<T: States> Plugin for SettingsPlugin<T> {
         )
         .add_systems(OnExit(self.running_state.clone()), Self::cleanup_menu);
         app.add_message::<CreateGameEvent>();
+        app.add_message::<BackToMenuEvent>();
     }
 }
 

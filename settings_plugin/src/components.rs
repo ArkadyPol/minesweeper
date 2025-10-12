@@ -8,6 +8,7 @@ pub struct SettingsUIRoot;
 #[derive(Component)]
 pub enum SettingsButtonAction {
     Start,
+    BackToMenu,
 }
 
 #[cfg(feature = "debug")]

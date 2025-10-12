@@ -1,6 +1,9 @@
 use bevy::{log, prelude::*};
 use main_menu_plugin::{MainMenuPlugin, events::LoadSettingsEvent};
-use settings_plugin::{SettingsPlugin, events::CreateGameEvent};
+use settings_plugin::{
+    SettingsPlugin,
+    events::{BackToMenuEvent, CreateGameEvent},
+};
 
 #[derive(Debug, Clone, Default, Eq, PartialEq, Hash, States)]
 pub enum AppState {
@@ -111,7 +114,7 @@ fn state_handler(
         log::debug!("clearing detected");
         if let AppState::InGame { .. } = state.get() {
             log::info!("clearing game");
-            next_state.set(AppState::Out);
+            next_state.set(AppState::MainMenu);
         }
     }
     if keys.just_pressed(KeyCode::KeyG) {
@@ -144,6 +147,7 @@ fn state_handler(
 fn handle_state_game_events(
     mut create_game_reader: MessageReader<CreateGameEvent>,
     mut load_settings_reader: MessageReader<LoadSettingsEvent>,
+    mut back_to_menu_reader: MessageReader<BackToMenuEvent>,
     mut next_state: ResMut<NextState<AppState>>,
 ) {
     for _ev in create_game_reader.read() {
@@ -153,5 +157,9 @@ fn handle_state_game_events(
     for _ev in load_settings_reader.read() {
         log::info!("loading settings from event");
         next_state.set(AppState::Settings);
+    }
+    for _ev in back_to_menu_reader.read() {
+        log::info!("back to menu");
+        next_state.set(AppState::MainMenu);
     }
 }
