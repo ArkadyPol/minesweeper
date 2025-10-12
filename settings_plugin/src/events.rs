@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::components::InputValue;
+use crate::input_value::InputValue;
 
 #[derive(Debug, Copy, Clone, Message)]
 pub struct CreateGameEvent;
