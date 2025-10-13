@@ -9,7 +9,7 @@ debug = ["bevy-inspector-egui"]
 
 [dependencies]
 # Engine
-bevy = "0.17.2"
+bevy = { workspace = true }
 
 # Hierarchy inspector debug
 bevy-inspector-egui = { version = "0.34.0", optional = true }

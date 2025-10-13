@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-default = []
+default = ["board_v2"]
 board_v1 = ["board_plugin"]
 board_v2 = ["board_plugin_v2"]
 debug = [
@@ -16,7 +16,7 @@ debug = [
 ]
 
 [dependencies]
-bevy = "0.17.2"
+bevy = { version = "0.17.2", features = ["dynamic_linking", "experimental_bevy_ui_widgets"] }
 board_plugin = { path = "board_plugin", optional = true }
 board_plugin_v2 = { path = "board_plugin_v2", optional = true }
 main_menu_plugin = { path = "main_menu_plugin"}
@@ -26,11 +26,16 @@ settings_plugin = { path = "settings_plugin"}
 bevy-inspector-egui = { version = "0.34.0", optional = true }
 
 [workspace]
+resolver = "2"
 members = [
     "board_plugin",
     "board_plugin_v2",
-    "main_menu_plugin"
+    "main_menu_plugin",
+    "settings_plugin"
 ]
+
+[workspace.dependencies]
+bevy = { version = "0.17.2", features = ["dynamic_linking", "experimental_bevy_ui_widgets"] }
 
 # Enable optimizations for dependencies (incl. Bevy), but not for our code:
 [profile.dev.package."*"]

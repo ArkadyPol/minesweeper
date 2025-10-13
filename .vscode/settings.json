@@ -1,6 +1,6 @@
 {
     "rust-analyzer.cargo.features": [
-        "board_v2",
         "debug"
-    ]
+    ],
+    "rust-analyzer.cargo.targetDir": true,
 }

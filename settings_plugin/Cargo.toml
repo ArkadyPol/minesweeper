@@ -9,7 +9,7 @@ debug = ["bevy-inspector-egui"]
 
 [dependencies]
 # Engine
-bevy = "0.17.2"
+bevy = { workspace = true }
 
 # Serialization
 serde = "1.0.228"
