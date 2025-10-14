@@ -1,4 +1,4 @@
-use bevy::{ecs::relationship::RelatedSpawner, prelude::*};
+use bevy::prelude::*;
 
 use super::common::field;
 
@@ -12,9 +12,6 @@ pub fn tile_padding_row(font: Handle<Font>, tile_padding: f32) -> impl Bundle {
             column_gap: px(16),
             ..default()
         },
-        Children::spawn(SpawnWith(move |row: &mut RelatedSpawner<ChildOf>| {
-            // Tile padding
-            field(row, font.clone(), "Tile padding", tile_padding);
-        })),
+        children![field(font.clone(), "Tile padding", tile_padding)],
     )
 }

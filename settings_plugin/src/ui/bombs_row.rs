@@ -1,4 +1,4 @@
-use bevy::{ecs::relationship::RelatedSpawner, prelude::*};
+use bevy::prelude::*;
 
 use super::common::field;
 
@@ -12,9 +12,6 @@ pub fn bombs_row(font: Handle<Font>, bomb_count: u16) -> impl Bundle {
             column_gap: px(16),
             ..default()
         },
-        Children::spawn(SpawnWith(move |row: &mut RelatedSpawner<ChildOf>| {
-            // Bombs
-            field(row, font.clone(), "Bombs", bomb_count as i32);
-        })),
+        children![field(font.clone(), "Bombs", bomb_count as i32)],
     )
 }

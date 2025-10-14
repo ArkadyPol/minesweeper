@@ -1,4 +1,4 @@
-use bevy::{ecs::relationship::RelatedSpawner, prelude::*};
+use bevy::prelude::*;
 
 use super::common::{field, label};
 
@@ -12,13 +12,10 @@ pub fn map_size_row(font: Handle<Font>, (width, height): (u16, u16)) -> impl Bun
             column_gap: px(16),
             ..default()
         },
-        Children::spawn(SpawnWith(move |row: &mut RelatedSpawner<ChildOf>| {
-            // Map size
-            row.spawn(label(font.clone(), "Map size"));
-            // Width
-            field(row, font.clone(), "Width", width as i32);
-            // Height
-            field(row, font.clone(), "Height", height as i32);
-        })),
+        children![
+            label(font.clone(), "Map size"),
+            field(font.clone(), "Width", width as i32),
+            field(font.clone(), "Height", height as i32)
+        ],
     )
 }

@@ -1,6 +1,6 @@
 use bevy::{
-    color::palettes::css::GRAY, ecs::relationship::RelatedSpawner, input::keyboard::Key, log,
-    prelude::*, text::ComputedTextBlock,
+    color::palettes::css::GRAY, input::keyboard::Key, log, prelude::*, text::ComputedTextBlock,
+    ui_widgets::observe,
 };
 
 use crate::{
@@ -11,38 +11,29 @@ use crate::{
 
 use super::text;
 
-pub fn text_input(
-    parent: &mut RelatedSpawner<ChildOf>,
-    font: Handle<Font>,
-    value: impl Into<InputValue>,
-) {
+pub fn text_input(font: Handle<Font>, value: impl Into<InputValue>) -> impl Bundle {
     let value: InputValue = value.into();
 
-    parent
-        .spawn((
-            Name::new("Text Input"),
-            Node {
-                width: px(150),
-                padding: px(6).all(),
-                align_items: AlignItems::Center,
-                justify_content: JustifyContent::Center,
-                border: px(4).all(),
-                ..default()
-            },
-            BackgroundColor(Color::from(GRAY)),
-            TextInput {
-                value: value.clone(),
-                ..default()
-            },
-            Children::spawn(SpawnWith(move |parent: &mut RelatedSpawner<ChildOf>| {
-                parent
-                    .spawn(text(font.clone(), value))
-                    .observe(on_click_text);
-            })),
-        ))
-        .observe(on_lost_focus_handler)
-        .observe(on_set_cursor_pos)
-        .observe(on_back_original_input);
+    (
+        Name::new("Text Input"),
+        Node {
+            width: px(150),
+            padding: px(6).all(),
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
+            border: px(4).all(),
+            ..default()
+        },
+        BackgroundColor(Color::from(GRAY)),
+        TextInput {
+            value: value.clone(),
+            ..default()
+        },
+        children![(text(font.clone(), value), observe(on_click_text))],
+        observe(on_lost_focus_handler),
+        observe(on_set_cursor_pos),
+        observe(on_back_original_input),
+    )
 }
 
 pub fn keyboard_handler(

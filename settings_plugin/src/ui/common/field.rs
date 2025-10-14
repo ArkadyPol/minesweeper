@@ -1,32 +1,27 @@
-use bevy::{ecs::relationship::RelatedSpawner, prelude::*};
+use bevy::{prelude::*, ui_widgets::observe};
 
 use crate::{events::ChangeInput, input_value::InputValue};
 
 use super::{label, text_input};
 
 pub fn field(
-    parent: &mut RelatedSpawner<ChildOf>,
     font: Handle<Font>,
     label_txt: impl Into<String> + Clone,
     init_value: impl Into<InputValue>,
-) {
-    let label_txt = label_txt.into();
-    let init_value: InputValue = init_value.into();
-
-    parent
-        .spawn((
-            Node {
-                flex_direction: FlexDirection::Row,
-                align_items: AlignItems::Center,
-                column_gap: px(8),
-                ..default()
-            },
-            Children::spawn(SpawnWith(move |sub: &mut RelatedSpawner<ChildOf>| {
-                sub.spawn(label(font.clone(), label_txt));
-                text_input(sub, font.clone(), init_value);
-            })),
-        ))
-        .observe(on_change_input);
+) -> impl Bundle {
+    (
+        Node {
+            flex_direction: FlexDirection::Row,
+            align_items: AlignItems::Center,
+            column_gap: px(8),
+            ..default()
+        },
+        children![
+            label(font.clone(), label_txt),
+            text_input(font.clone(), init_value)
+        ],
+        observe(on_change_input),
+    )
 }
 
 fn on_change_input(
