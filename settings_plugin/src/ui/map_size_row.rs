@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use super::common::{field, label};
 
-pub fn map_size_row(font: Handle<Font>, (width, height): (u16, u16)) -> impl Bundle {
+pub fn map_size_row((width, height): (u16, u16)) -> impl Bundle {
     (
         Node {
             width: percent(100.0),
@@ -13,9 +13,9 @@ pub fn map_size_row(font: Handle<Font>, (width, height): (u16, u16)) -> impl Bun
             ..default()
         },
         children![
-            label(font.clone(), "Map size"),
-            field(font.clone(), "Width", width as i32),
-            field(font.clone(), "Height", height as i32)
+            label("Map size"),
+            field("Width", width as i32),
+            field("Height", height as i32)
         ],
     )
 }

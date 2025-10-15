@@ -11,7 +11,7 @@ use crate::{
 
 use super::text;
 
-pub fn text_input(font: Handle<Font>, value: impl Into<InputValue>) -> impl Bundle {
+pub fn text_input(value: impl Into<InputValue>) -> impl Bundle {
     let value: InputValue = value.into();
 
     (
@@ -29,7 +29,7 @@ pub fn text_input(font: Handle<Font>, value: impl Into<InputValue>) -> impl Bund
             value: value.clone(),
             ..default()
         },
-        children![(text(font.clone(), value), observe(on_click_text))],
+        children![(text(24.0, value), observe(on_click_text))],
         observe(on_lost_focus_handler),
         observe(on_set_cursor_pos),
         observe(on_back_original_input),

@@ -8,6 +8,8 @@ use crate::{
     events::{BackToMenuEvent, CreateGameEvent},
 };
 
+use super::text;
+
 #[derive(Debug, Default)]
 pub struct ButtonPosition {
     pub right: Val,
@@ -17,7 +19,6 @@ pub struct ButtonPosition {
 
 pub fn button(
     label: &str,
-    font: Handle<Font>,
     action: SettingsButtonAction,
     button_position: ButtonPosition,
 ) -> impl Bundle {
@@ -36,15 +37,7 @@ pub fn button(
         BackgroundColor(Color::from(GRAY)),
         Button,
         action,
-        children![(
-            Text::new(label),
-            TextFont {
-                font: font.clone(),
-                font_size: 32.0,
-                ..default()
-            },
-            TextColor(Color::WHITE),
-        )],
+        children![text(32.0, label)],
     )
 }
 

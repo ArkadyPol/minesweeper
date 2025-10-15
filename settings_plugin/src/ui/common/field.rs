@@ -5,7 +5,6 @@ use crate::{events::ChangeInput, input_value::InputValue};
 use super::{label, text_input};
 
 pub fn field(
-    font: Handle<Font>,
     label_txt: impl Into<String> + Clone,
     init_value: impl Into<InputValue>,
 ) -> impl Bundle {
@@ -16,10 +15,7 @@ pub fn field(
             column_gap: px(8),
             ..default()
         },
-        children![
-            label(font.clone(), label_txt),
-            text_input(font.clone(), init_value)
-        ],
+        children![label(label_txt), text_input(init_value)],
         observe(on_change_input),
     )
 }

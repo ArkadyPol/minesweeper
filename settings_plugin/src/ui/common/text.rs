@@ -1,11 +1,10 @@
 use bevy::prelude::*;
 
-pub fn text(font: Handle<Font>, value: impl Into<String>) -> impl Bundle {
+pub fn text(font_size: f32, value: impl Into<String>) -> impl Bundle {
     (
         Text::new(value),
         TextFont {
-            font: font.clone(),
-            font_size: 24.0,
+            font_size,
             ..default()
         },
         TextColor(Color::WHITE),

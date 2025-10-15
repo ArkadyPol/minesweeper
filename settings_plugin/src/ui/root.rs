@@ -21,6 +21,15 @@ pub fn create_menu(
 ) {
     let font: Handle<Font> = asset_server.load("fonts/FiraSans-Bold.ttf");
 
+    let font_observer = commands
+        .add_observer(
+            move |event: On<Add, TextFont>, mut query: Query<&mut TextFont>| {
+                let mut text_font = query.get_mut(event.entity).unwrap();
+                text_font.font = font.clone();
+            },
+        )
+        .id();
+
     commands
         .spawn((
             Name::new("Settings UI Root"),
@@ -36,12 +45,11 @@ pub fn create_menu(
             SettingsUIRoot,
             CursorTimer::default(),
             children![
-                map_size_row(font.clone(), board.map_size),
-                bombs_row(font.clone(), board.bomb_count),
-                tile_padding_row(font.clone(), board.tile_padding),
+                map_size_row(board.map_size),
+                bombs_row(board.bomb_count),
+                tile_padding_row(board.tile_padding),
                 button(
                     "Start",
-                    font.clone(),
                     SettingsButtonAction::Start,
                     ButtonPosition {
                         right: px(50),
@@ -51,7 +59,6 @@ pub fn create_menu(
                 ),
                 button(
                     "Back to Menu",
-                    font.clone(),
                     SettingsButtonAction::BackToMenu,
                     ButtonPosition {
                         left: px(50),
@@ -63,6 +70,8 @@ pub fn create_menu(
         ))
         .observe(focus_handler)
         .observe(on_change_labeled_input);
+
+    commands.entity(font_observer).despawn();
 
     log::info!("Settings menu initialized");
 }
