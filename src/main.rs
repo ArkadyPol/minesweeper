@@ -1,4 +1,4 @@
-use bevy::{log, prelude::*};
+use bevy::{log, prelude::*, ui_widgets::CheckboxPlugin};
 use main_menu_plugin::{MainMenuPlugin, events::LoadSettingsEvent};
 use settings_plugin::{
     SettingsPlugin,
@@ -39,14 +39,17 @@ impl ComputedStates for InGame {
 fn main() {
     let mut app = App::new();
     // Bevy default plugins with window setup
-    app.add_plugins(DefaultPlugins.set(WindowPlugin {
-        primary_window: Some(Window {
-            title: "Mine Sweeper!".to_string(),
-            resolution: (700, 800).into(),
+    app.add_plugins((
+        DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "Mine Sweeper!".to_string(),
+                resolution: (700, 800).into(),
+                ..default()
+            }),
             ..default()
         }),
-        ..default()
-    }));
+        CheckboxPlugin,
+    ));
     app.insert_resource(SpritePickingSettings {
         picking_mode: SpritePickingMode::BoundingBox,
         ..default()

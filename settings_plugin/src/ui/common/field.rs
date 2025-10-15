@@ -9,6 +9,7 @@ pub fn field(
     init_value: impl Into<InputValue>,
 ) -> impl Bundle {
     (
+        Name::new("Field"),
         Node {
             flex_direction: FlexDirection::Row,
             align_items: AlignItems::Center,

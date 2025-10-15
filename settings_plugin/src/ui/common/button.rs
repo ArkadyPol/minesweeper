@@ -23,6 +23,7 @@ pub fn button(
     button_position: ButtonPosition,
 ) -> impl Bundle {
     (
+        Name::new("Button"),
         Node {
             width: px(250),
             padding: px(16).all(),

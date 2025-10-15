@@ -11,6 +11,7 @@ use super::{
     bombs_row::bombs_row,
     common::{ButtonPosition, button},
     map_size_row::map_size_row,
+    safe_start_row::safe_start_row,
     tile_padding_row::tile_padding_row,
 };
 
@@ -48,6 +49,7 @@ pub fn create_menu(
                 map_size_row(board.map_size),
                 bombs_row(board.bomb_count),
                 tile_padding_row(board.tile_padding),
+                safe_start_row(board.safe_start),
                 button(
                     "Start",
                     SettingsButtonAction::Start,
@@ -134,6 +136,11 @@ fn on_change_labeled_input(
             "Tile padding" => {
                 if let InputValue::Float(tile_padding) = change.value {
                     return board.set_tile_padding(tile_padding);
+                }
+            }
+            "Safe start" => {
+                if let InputValue::Bool(safe_start) = change.value {
+                    board.safe_start = safe_start;
                 }
             }
             _ => {}

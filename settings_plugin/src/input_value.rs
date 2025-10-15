@@ -1,6 +1,7 @@
 use std::{
     fmt,
     num::{ParseFloatError, ParseIntError},
+    str::ParseBoolError,
 };
 
 #[cfg_attr(feature = "debug", derive(bevy::reflect::Reflect))]
@@ -9,12 +10,14 @@ pub enum InputValue {
     Str(String),
     Float(f32),
     Int(i32),
+    Bool(bool),
 }
 
 #[derive(Debug)]
 pub enum InputError {
     ParseFloatError(ParseFloatError),
     ParseIntError(ParseIntError),
+    ParseBoolError(ParseBoolError),
 }
 
 impl From<ParseFloatError> for InputError {
@@ -29,11 +32,18 @@ impl From<ParseIntError> for InputError {
     }
 }
 
+impl From<ParseBoolError> for InputError {
+    fn from(value: ParseBoolError) -> Self {
+        InputError::ParseBoolError(value)
+    }
+}
+
 impl fmt::Display for InputError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             InputError::ParseFloatError(e) => write!(f, "{}", e),
             InputError::ParseIntError(e) => write!(f, "{}", e),
+            InputError::ParseBoolError(e) => write!(f, "{}", e),
         }
     }
 }
@@ -44,6 +54,7 @@ impl InputValue {
             InputValue::Str(s) => *s = value.into(),
             InputValue::Float(f) => *f = value.parse::<f32>()?,
             InputValue::Int(i) => *i = value.parse::<i32>()?,
+            InputValue::Bool(b) => *b = value.parse::<bool>()?,
         }
         Ok(())
     }
@@ -53,6 +64,7 @@ impl InputValue {
             InputValue::Str(s) => s.into(),
             InputValue::Float(f) => f.to_string(),
             InputValue::Int(i) => i.to_string(),
+            InputValue::Bool(b) => b.to_string(),
         }
     }
 }
@@ -78,5 +90,11 @@ impl From<String> for InputValue {
 impl Into<String> for InputValue {
     fn into(self) -> String {
         self.as_string()
+    }
+}
+
+impl From<bool> for InputValue {
+    fn from(value: bool) -> Self {
+        InputValue::Bool(value)
     }
 }
