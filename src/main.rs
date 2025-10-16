@@ -1,4 +1,4 @@
-use bevy::{log, prelude::*, ui_widgets::CheckboxPlugin};
+use bevy::{log, prelude::*, ui_widgets::UiWidgetsPlugins};
 use main_menu_plugin::{MainMenuPlugin, events::LoadSettingsEvent};
 use settings_plugin::{
     SettingsPlugin,
@@ -48,7 +48,7 @@ fn main() {
             }),
             ..default()
         }),
-        CheckboxPlugin,
+        UiWidgetsPlugins,
     ));
     app.insert_resource(SpritePickingSettings {
         picking_mode: SpritePickingMode::BoundingBox,

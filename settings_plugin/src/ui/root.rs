@@ -11,6 +11,7 @@ use super::{
     bombs_row::bombs_row,
     common::{ButtonPosition, button},
     map_size_row::map_size_row,
+    position_row::position_row,
     safe_start_row::safe_start_row,
     tile_padding_row::tile_padding_row,
 };
@@ -48,6 +49,7 @@ pub fn create_menu(
             children![
                 map_size_row(board.map_size),
                 bombs_row(board.bomb_count),
+                position_row(&board.position),
                 tile_padding_row(board.tile_padding),
                 safe_start_row(board.safe_start),
                 button(
