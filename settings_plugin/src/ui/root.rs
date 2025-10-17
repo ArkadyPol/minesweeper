@@ -138,6 +138,11 @@ fn on_change_labeled_input(
                     return board.set_bomb_count(bombs);
                 }
             }
+            "Board position" => {
+                if let InputValue::Str(raw) = &change.value {
+                    board.position = ron::from_str(raw).map_err(|e| e.to_string())?;
+                }
+            }
             "Tile padding" => {
                 if let InputValue::Float(tile_padding) = change.value {
                     return board.set_tile_padding(tile_padding);

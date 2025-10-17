@@ -5,9 +5,12 @@ use bevy::{
     ui::Checked,
     ui_widgets::{RadioButton, RadioGroup, ValueChange, observe},
 };
+use ron::to_string;
 
 use crate::{
-    components::{BoardPositionRow, Controlled, Controls},
+    components::{BoardPositionRow, Controlled, Controls, TextInput},
+    events::ChangeInput,
+    input_value::InputValue,
     resources::BoardPosition,
 };
 
@@ -68,6 +71,7 @@ pub fn position_row(pos: &BoardPosition) -> impl Bundle {
                             field("Y", centered_vec.y),
                             field("Z", centered_vec.z),
                         ],
+                        observe(on_change_input),
                     );
 
                     select_button(sub, "Centered", is_centered, centered_node);
@@ -92,17 +96,19 @@ pub fn position_row(pos: &BoardPosition) -> impl Bundle {
                             field("Y", custom_vec.y),
                             field("Z", custom_vec.z),
                         ],
+                        observe(on_change_input),
                     );
 
                     select_button(sub, "Custom", is_custom, custom_node);
                 })),
                 observe(button_group_update),
+                observe(on_value_change),
             ),
         ],
     )
 }
 
-pub fn button_group_update(
+fn button_group_update(
     value_change: On<ValueChange<Entity>>,
     query: Query<&Children, With<RadioGroup>>,
     mut buttons: Query<(Has<Checked>, &mut BackgroundColor, &Controlled), With<RadioButton>>,
@@ -123,6 +129,78 @@ pub fn button_group_update(
             node.display = Display::None;
         }
     }
+}
+
+fn on_value_change(
+    value_change: On<ValueChange<Entity>>,
+    buttons: Query<&Controlled, With<RadioButton>>,
+    mut commands: Commands,
+) {
+    let controlled = buttons.get(value_change.value).unwrap();
+    let node_entity = controlled[0];
+
+    commands.trigger(ChangeInput {
+        entity: node_entity,
+        value: InputValue::from(0.0),
+        label: None,
+    });
+}
+
+fn on_change_input(
+    mut change: On<ChangeInput>,
+    names: Query<(&Name, &Children)>,
+    labels: Query<&Name, With<Label>>,
+    inputs: Query<&TextInput>,
+) {
+    let (variant, children) = names.get(change.entity).unwrap();
+    let mut vec = Vec3::default();
+
+    for &child in children {
+        // Field
+        if let Ok((_name, children)) = names.get(child) {
+            let mut label = String::new();
+            let mut input_value = InputValue::Float(0.0);
+
+            for &child in children {
+                // Label
+                if let Ok(name) = labels.get(child) {
+                    label = name.into();
+                }
+                // Text Input
+                if let Ok(input) = inputs.get(child) {
+                    input_value = input.value.clone();
+                }
+            }
+
+            match label.as_str() {
+                "X" => {
+                    if let InputValue::Float(x) = input_value {
+                        vec.x = x;
+                    }
+                }
+                "Y" => {
+                    if let InputValue::Float(y) = input_value {
+                        vec.y = y;
+                    }
+                }
+                "Z" => {
+                    if let InputValue::Float(z) = input_value {
+                        vec.z = z;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let board_pos = match variant.as_str() {
+        "Centered" => BoardPosition::Centered { offset: vec },
+        "Custom" => BoardPosition::Custom(vec),
+        _ => unreachable!(),
+    };
+
+    change.label = Some("Board position".into());
+    change.value = InputValue::from(to_string(&board_pos).unwrap());
 }
 
 pub fn bind_controls_to_board_pos(
