@@ -25,11 +25,7 @@ pub fn select_button(
             justify_content: JustifyContent::Center,
             ..default()
         },
-        if selected {
-            BackgroundColor(Color::from(BLUE))
-        } else {
-            BackgroundColor(Color::from(GRAY))
-        },
+        BackgroundColor(Color::from(if selected { BLUE } else { GRAY })),
         RadioButton,
         children![text(24.0, caption)],
         related!(Controlled[controls]),

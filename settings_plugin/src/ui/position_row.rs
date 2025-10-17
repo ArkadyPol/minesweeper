@@ -47,47 +47,54 @@ pub fn position_row(pos: &BoardPosition) -> impl Bundle {
                 },
                 RadioGroup,
                 Children::spawn(SpawnWith(move |sub: &mut RelatedSpawner<'_, ChildOf>| {
-                    let is_centered = matches!(pos, BoardPosition::Centered { .. });
-                    select_button(
-                        sub,
-                        "Centered",
-                        is_centered,
-                        (
-                            Name::new("Centered"),
-                            Node {
-                                display: if is_centered {
-                                    Display::Flex
-                                } else {
-                                    Display::None
-                                },
-                                ..node.clone()
+                    let (is_centered, centered_vec) = match &pos {
+                        BoardPosition::Centered { offset } => (true, *offset),
+                        _ => (false, Vec3::default()),
+                    };
+
+                    let centered_node = (
+                        Name::new("Centered"),
+                        Node {
+                            display: if is_centered {
+                                Display::Flex
+                            } else {
+                                Display::None
                             },
-                            children![
-                                label("Offset"),
-                                field("X", 0.0),
-                                field("Y", 0.0),
-                                field("Z", 0.0),
-                            ],
-                        ),
+                            ..node.clone()
+                        },
+                        children![
+                            label("Offset"),
+                            field("X", centered_vec.x),
+                            field("Y", centered_vec.y),
+                            field("Z", centered_vec.z),
+                        ],
                     );
-                    let is_custom = matches!(pos, BoardPosition::Custom { .. });
-                    select_button(
-                        sub,
-                        "Custom",
-                        is_custom,
-                        (
-                            Name::new("Custom"),
-                            Node {
-                                display: if is_custom {
-                                    Display::Flex
-                                } else {
-                                    Display::None
-                                },
-                                ..node
+
+                    select_button(sub, "Centered", is_centered, centered_node);
+
+                    let (is_custom, custom_vec) = match &pos {
+                        BoardPosition::Custom(vec) => (true, *vec),
+                        _ => (false, Vec3::default()),
+                    };
+
+                    let custom_node = (
+                        Name::new("Custom"),
+                        Node {
+                            display: if is_custom {
+                                Display::Flex
+                            } else {
+                                Display::None
                             },
-                            children![field("X", 0.0), field("Y", 0.0), field("Z", 0.0),],
-                        ),
+                            ..node
+                        },
+                        children![
+                            field("X", custom_vec.x),
+                            field("Y", custom_vec.y),
+                            field("Z", custom_vec.z),
+                        ],
                     );
+
+                    select_button(sub, "Custom", is_custom, custom_node);
                 })),
                 observe(button_group_update),
             ),
