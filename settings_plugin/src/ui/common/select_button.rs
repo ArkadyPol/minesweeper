@@ -6,9 +6,16 @@ use bevy::{
     ui_widgets::RadioButton,
 };
 
+use crate::components::Controlled;
+
 use super::text;
 
-pub fn select_button(parent: &mut RelatedSpawner<'_, ChildOf>, label: &str, selected: bool) {
+pub fn select_button(
+    parent: &mut RelatedSpawner<'_, ChildOf>,
+    caption: &str,
+    selected: bool,
+    controls: impl Bundle,
+) {
     let mut cmd = parent.spawn((
         Name::new("Button"),
         Node {
@@ -24,7 +31,8 @@ pub fn select_button(parent: &mut RelatedSpawner<'_, ChildOf>, label: &str, sele
             BackgroundColor(Color::from(GRAY))
         },
         RadioButton,
-        children![text(24.0, label)],
+        children![text(24.0, caption)],
+        related!(Controlled[controls]),
     ));
 
     if selected {

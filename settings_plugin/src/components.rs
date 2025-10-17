@@ -47,3 +47,24 @@ impl Default for CursorTimer {
         Self(Timer::from_seconds(0.5, TimerMode::Repeating))
     }
 }
+
+#[cfg_attr(
+    feature = "debug",
+    derive(bevy_inspector_egui::InspectorOptions, bevy::reflect::Reflect),
+    reflect(Component, InspectorOptions)
+)]
+#[derive(Component)]
+#[relationship(relationship_target = Controlled)]
+pub struct Controls(pub Entity);
+
+#[cfg_attr(
+    feature = "debug",
+    derive(bevy_inspector_egui::InspectorOptions, bevy::reflect::Reflect),
+    reflect(Component, InspectorOptions)
+)]
+#[derive(Component, Deref)]
+#[relationship_target(relationship = Controls)]
+pub struct Controlled(Vec<Entity>);
+
+#[derive(Component)]
+pub struct BoardPositionRow;
