@@ -14,6 +14,7 @@ use super::{
     position_row::{position_row, spawn_board_pos_controls},
     safe_start_row::safe_start_row,
     tile_padding_row::tile_padding_row,
+    tile_size_row::{spawn_tile_size_controls, tile_size_row},
 };
 
 pub fn create_menu(
@@ -33,6 +34,7 @@ pub fn create_menu(
         .id();
 
     let board_pos_controls = spawn_board_pos_controls(&board.position, &mut commands);
+    let tile_size_contols = spawn_tile_size_controls(&board.tile_size, &mut commands);
 
     commands
         .spawn((
@@ -52,6 +54,7 @@ pub fn create_menu(
                 map_size_row(board.map_size),
                 bombs_row(board.bomb_count),
                 position_row(&board.position, board_pos_controls),
+                tile_size_row(&board.tile_size, tile_size_contols),
                 tile_padding_row(board.tile_padding),
                 safe_start_row(board.safe_start),
                 button(
@@ -140,6 +143,11 @@ fn on_change_labeled_input(
             "Board position" => {
                 if let InputValue::Str(raw) = &change.value {
                     board.position = ron::from_str(raw).map_err(|e| e.to_string())?;
+                }
+            }
+            "Tile size" => {
+                if let InputValue::Str(raw) = &change.value {
+                    board.tile_size = ron::from_str(raw).map_err(|e| e.to_string())?;
                 }
             }
             "Tile padding" => {

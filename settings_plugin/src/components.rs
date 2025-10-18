@@ -65,6 +65,3 @@ pub struct Controls(pub Entity);
 #[derive(Component, Deref)]
 #[relationship_target(relationship = Controls)]
 pub struct Controlled(Vec<Entity>);
-
-#[derive(Component)]
-pub struct BoardPositionRow;

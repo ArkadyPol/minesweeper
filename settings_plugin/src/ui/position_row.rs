@@ -8,7 +8,7 @@ use bevy::{
 use ron::to_string;
 
 use crate::{
-    components::{BoardPositionRow, Controlled, Controls, TextInput},
+    components::{Controlled, Controls, TextInput},
     events::ChangeInput,
     input_value::InputValue,
     resources::BoardPosition,
@@ -28,7 +28,6 @@ pub fn position_row(pos: &BoardPosition, controls: [Entity; 2]) -> impl Bundle {
             column_gap: px(16),
             ..default()
         },
-        BoardPositionRow,
         Children::spawn((
             Spawn(label("Board position")),
             Spawn((
@@ -87,7 +86,7 @@ fn controls_view(caption: &str, selected: bool, vec: Vec3) -> impl Bundle {
     )
 }
 
-fn button_group_update(
+pub fn button_group_update(
     value_change: On<ValueChange<Entity>>,
     query: Query<&Children, With<RadioGroup>>,
     mut buttons: Query<(Has<Checked>, &mut BackgroundColor, &Controlled), With<RadioButton>>,
@@ -110,7 +109,7 @@ fn button_group_update(
     }
 }
 
-fn on_value_change(
+pub fn on_value_change(
     value_change: On<ValueChange<Entity>>,
     buttons: Query<&Controlled, With<RadioButton>>,
     mut commands: Commands,
