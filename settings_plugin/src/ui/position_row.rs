@@ -19,15 +19,6 @@ use super::common::{field, label, select_button};
 pub fn position_row(pos: &BoardPosition) -> impl Bundle {
     let pos = pos.clone();
 
-    let node = Node {
-        width: percent(65.0),
-        flex_direction: FlexDirection::Row,
-        align_items: AlignItems::Center,
-        justify_content: JustifyContent::SpaceEvenly,
-        column_gap: px(16),
-        ..default()
-    };
-
     (
         Node {
             width: percent(100.0),
@@ -55,56 +46,53 @@ pub fn position_row(pos: &BoardPosition) -> impl Bundle {
                         _ => (false, Vec3::default()),
                     };
 
-                    let centered_node = (
-                        Name::new("Centered"),
-                        Node {
-                            display: if is_centered {
-                                Display::Flex
-                            } else {
-                                Display::None
-                            },
-                            ..node.clone()
-                        },
-                        children![
-                            label("Offset"),
-                            field("X", centered_vec.x),
-                            field("Y", centered_vec.y),
-                            field("Z", centered_vec.z),
-                        ],
-                        observe(on_change_input),
-                    );
-
-                    select_button(sub, "Centered", is_centered, centered_node);
+                    let centered_view = controls_view("Centered", is_centered, centered_vec);
+                    select_button(sub, "Centered", is_centered, centered_view);
 
                     let (is_custom, custom_vec) = match &pos {
                         BoardPosition::Custom(vec) => (true, *vec),
                         _ => (false, Vec3::default()),
                     };
 
-                    let custom_node = (
-                        Name::new("Custom"),
-                        Node {
-                            display: if is_custom {
-                                Display::Flex
-                            } else {
-                                Display::None
-                            },
-                            ..node
-                        },
-                        children![
-                            field("X", custom_vec.x),
-                            field("Y", custom_vec.y),
-                            field("Z", custom_vec.z),
-                        ],
-                        observe(on_change_input),
-                    );
-
-                    select_button(sub, "Custom", is_custom, custom_node);
+                    let custom_view = controls_view("Custom", is_custom, custom_vec);
+                    select_button(sub, "Custom", is_custom, custom_view);
                 })),
                 observe(button_group_update),
                 observe(on_value_change),
             ),
         ],
+    )
+}
+
+fn controls_view(caption: &str, selected: bool, vec: Vec3) -> impl Bundle {
+    let is_centered = caption == "Centered";
+
+    (
+        Name::new(caption.to_string()),
+        Node {
+            width: percent(65.0),
+            flex_direction: FlexDirection::Row,
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::SpaceEvenly,
+            column_gap: px(16),
+            display: if selected {
+                Display::Flex
+            } else {
+                Display::None
+            },
+            ..default()
+        },
+        Children::spawn(SpawnWith(
+            move |parent: &mut RelatedSpawner<'_, ChildOf>| {
+                if is_centered {
+                    parent.spawn(label("Offset"));
+                }
+                parent.spawn(field("X", vec.x));
+                parent.spawn(field("Y", vec.y));
+                parent.spawn(field("Z", vec.z));
+            },
+        )),
+        observe(on_change_input),
     )
 }
 
