@@ -11,7 +11,7 @@ use super::{
     bombs_row::bombs_row,
     common::{ButtonPosition, button},
     map_size_row::map_size_row,
-    position_row::{bind_controls_to_board_pos, position_row},
+    position_row::{position_row, spawn_board_pos_controls},
     safe_start_row::safe_start_row,
     tile_padding_row::tile_padding_row,
 };
@@ -32,7 +32,7 @@ pub fn create_menu(
         )
         .id();
 
-    let pos_observer = commands.add_observer(bind_controls_to_board_pos).id();
+    let board_pos_controls = spawn_board_pos_controls(&board.position, &mut commands);
 
     commands
         .spawn((
@@ -51,7 +51,7 @@ pub fn create_menu(
             children![
                 map_size_row(board.map_size),
                 bombs_row(board.bomb_count),
-                position_row(&board.position),
+                position_row(&board.position, board_pos_controls),
                 tile_padding_row(board.tile_padding),
                 safe_start_row(board.safe_start),
                 button(
@@ -78,7 +78,6 @@ pub fn create_menu(
         .observe(on_change_labeled_input);
 
     commands.entity(font_observer).despawn();
-    commands.entity(pos_observer).despawn();
 
     log::info!("Settings menu initialized");
 }

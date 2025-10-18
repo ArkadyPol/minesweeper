@@ -14,7 +14,7 @@ pub fn select_button(
     parent: &mut RelatedSpawner<'_, ChildOf>,
     caption: &str,
     selected: bool,
-    controls: impl Bundle,
+    controls: Entity,
 ) {
     let mut cmd = parent.spawn((
         Name::new("Button"),
@@ -28,7 +28,7 @@ pub fn select_button(
         BackgroundColor(Color::from(if selected { BLUE } else { GRAY })),
         RadioButton,
         children![text(24.0, caption)],
-        related!(Controlled[controls]),
+        Controlled::spawn(WithOneRelated(controls)),
     ));
 
     if selected {

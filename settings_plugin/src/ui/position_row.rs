@@ -16,7 +16,7 @@ use crate::{
 
 use super::common::{field, label, select_button};
 
-pub fn position_row(pos: &BoardPosition) -> impl Bundle {
+pub fn position_row(pos: &BoardPosition, controls: [Entity; 2]) -> impl Bundle {
     let pos = pos.clone();
 
     (
@@ -29,9 +29,9 @@ pub fn position_row(pos: &BoardPosition) -> impl Bundle {
             ..default()
         },
         BoardPositionRow,
-        children![
-            label("Board position"),
-            (
+        Children::spawn((
+            Spawn(label("Board position")),
+            Spawn((
                 Name::new("Button Group"),
                 Node {
                     flex_direction: FlexDirection::Row,
@@ -41,26 +41,17 @@ pub fn position_row(pos: &BoardPosition) -> impl Bundle {
                 },
                 RadioGroup,
                 Children::spawn(SpawnWith(move |sub: &mut RelatedSpawner<'_, ChildOf>| {
-                    let (is_centered, centered_vec) = match &pos {
-                        BoardPosition::Centered { offset } => (true, *offset),
-                        _ => (false, Vec3::default()),
-                    };
+                    let is_centered = matches!(&pos, BoardPosition::Centered { .. });
+                    let is_custom = matches!(&pos, BoardPosition::Custom { .. });
 
-                    let centered_view = controls_view("Centered", is_centered, centered_vec);
-                    select_button(sub, "Centered", is_centered, centered_view);
-
-                    let (is_custom, custom_vec) = match &pos {
-                        BoardPosition::Custom(vec) => (true, *vec),
-                        _ => (false, Vec3::default()),
-                    };
-
-                    let custom_view = controls_view("Custom", is_custom, custom_vec);
-                    select_button(sub, "Custom", is_custom, custom_view);
+                    select_button(sub, "Centered", is_centered, controls[0]);
+                    select_button(sub, "Custom", is_custom, controls[1]);
                 })),
                 observe(button_group_update),
                 observe(on_value_change),
-            ),
-        ],
+            )),
+            WithRelated::new(controls),
+        )),
     )
 }
 
@@ -191,27 +182,21 @@ fn on_change_input(
     change.value = InputValue::from(to_string(&board_pos).unwrap());
 }
 
-pub fn bind_controls_to_board_pos(
-    event: On<Add, Controls>,
-    query_ctrl: Query<&Controls>,
-    parents: Query<&ChildOf>,
-    board_pos: Query<(), With<BoardPositionRow>>,
-    mut commands: Commands,
-) {
-    let button_entity = query_ctrl.get(event.entity).unwrap().0;
-
-    let mut row_entity = None;
-
-    for parent in parents.iter_ancestors(button_entity) {
-        if board_pos.get(parent).is_ok() {
-            row_entity = Some(parent);
-            break;
-        }
-    }
-
-    let Some(row_entity) = row_entity else {
-        return;
+pub fn spawn_board_pos_controls(pos: &BoardPosition, commands: &mut Commands) -> [Entity; 2] {
+    let (is_centered, centered_vec) = match &pos {
+        BoardPosition::Centered { offset } => (true, *offset),
+        _ => (false, Vec3::default()),
+    };
+    let (is_custom, custom_vec) = match &pos {
+        BoardPosition::Custom(vec) => (true, *vec),
+        _ => (false, Vec3::default()),
     };
 
-    commands.entity(event.entity).insert(ChildOf(row_entity));
+    let centered_view = controls_view("Centered", is_centered, centered_vec);
+    let custom_view = controls_view("Custom", is_custom, custom_vec);
+
+    [
+        commands.spawn(centered_view).id(),
+        commands.spawn(custom_view).id(),
+    ]
 }
