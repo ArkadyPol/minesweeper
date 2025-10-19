@@ -24,6 +24,7 @@ pub fn uncover_tiles(
     };
     let bomb_count = options.bomb_count as usize;
     let cover_count = cover_query.count();
+    let mut is_finished = false;
 
     // We iterate through tile covers to uncover
     for (entity, parent) in children.iter() {
@@ -38,17 +39,19 @@ pub fn uncover_tiles(
             }
         };
 
-        if cover_count == bomb_count {
-            log::info!("Board completed");
-            commands.trigger(BoardCompletedEvent);
-        }
-
         if bomb.is_some() {
             log::info!("Boom !");
             commands.trigger(BombExplosionEvent);
+            return;
+        }
+
+        if cover_count == bomb_count && !is_finished {
+            log::info!("Board completed");
+            commands.trigger(BoardCompletedEvent);
+            is_finished = true;
         }
         // If the tile is empty..
-        else if bomb_counter.is_none() {
+        if bomb_counter.is_none() {
             // .. We propagate the uncovering by adding the `Uncover` component to adjacent tiles
             // which will then be removed next frame
             for neighbor_entity in neighbors.neighbors.iter().flatten() {
