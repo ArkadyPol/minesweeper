@@ -147,7 +147,8 @@ fn on_change_labeled_input(
             }
             "Tile size" => {
                 if let InputValue::Str(raw) = &change.value {
-                    board.tile_size = ron::from_str(raw).map_err(|e| e.to_string())?;
+                    let tile_size = ron::from_str(raw).map_err(|e| e.to_string())?;
+                    return board.set_tile_size(tile_size);
                 }
             }
             "Tile padding" => {
@@ -172,12 +173,13 @@ fn on_change_labeled_input(
             "Height" => InputValue::from(board.map_size.1 as i32),
             "Bombs" => InputValue::from(board.bomb_count as i32),
             "Tile padding" => InputValue::from(board.tile_padding),
+            "Tile size" => InputValue::from(ron::to_string(&board.tile_size).unwrap()),
             _ => unreachable!(),
         };
         commands.trigger(BackOriginalInput {
             entity: change.original_event_target(),
             value,
-        })
+        });
     }
 
     log::info!("Updated BoardOptions: {:?}", *board);

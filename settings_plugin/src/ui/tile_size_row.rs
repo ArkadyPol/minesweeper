@@ -3,10 +3,12 @@ use bevy::{
     prelude::*,
     ui_widgets::{RadioGroup, observe},
 };
-use ron::to_string;
 
 use crate::{
-    components::TextInput, events::ChangeInput, input_value::InputValue, resources::TileSize,
+    components::TextInput,
+    events::{BackOriginalInput, ChangeInput},
+    input_value::InputValue,
+    resources::TileSize,
 };
 
 use super::{
@@ -72,6 +74,7 @@ fn controls_view(caption: &str, selected: bool, vec: Vec<(String, f32)>) -> impl
             vec.into_iter().map(|(label, value)| field(label, value)),
         )),
         observe(on_change_input),
+        observe(on_back_original_input),
     )
 }
 
@@ -80,7 +83,12 @@ fn on_change_input(
     names: Query<(&Name, &Children)>,
     labels: Query<&Name, With<Label>>,
     inputs: Query<&TextInput>,
+    mut commands: Commands,
 ) {
+    if change.label == Some("Tile size".into()) {
+        return;
+    }
+
     let (variant, children) = names.get(change.entity).unwrap();
     let mut min = 0.0;
     let mut max = 0.0;
@@ -130,8 +138,56 @@ fn on_change_input(
         _ => unreachable!(),
     };
 
-    change.label = Some("Tile size".into());
-    change.value = InputValue::from(to_string(&tile_size).unwrap());
+    change.propagate(false);
+
+    commands.trigger(ChangeInput {
+        entity: change.entity,
+        value: InputValue::from(ron::to_string(&tile_size).unwrap()),
+        label: Some("Tile size".into()),
+    });
+}
+
+fn on_back_original_input(
+    event: On<BackOriginalInput>,
+    names: Query<(&Name, &Children)>,
+    labels: Query<&Name, With<Label>>,
+    inputs: Query<(), With<TextInput>>,
+    mut commands: Commands,
+) {
+    let tile_size: TileSize = ron::from_str(&event.value.as_string()).unwrap();
+    let (_variant, children) = names.get(event.entity).unwrap();
+
+    for &child in children {
+        // Field
+        if let Ok((_name, children)) = names.get(child) {
+            let mut label = None;
+            let mut input_entity = None;
+
+            for &child in children {
+                // Label
+                if let Ok(name) = labels.get(child) {
+                    label = Some(name.as_str());
+                }
+                // Text Input
+                if inputs.get(child).is_ok() {
+                    input_entity = Some(child);
+                }
+            }
+
+            let (Some(label), Some(entity)) = (label, input_entity) else {
+                continue;
+            };
+
+            let value = match (label, &tile_size) {
+                ("Min", TileSize::Adaptive { min, .. }) => InputValue::from(*min),
+                ("Max", TileSize::Adaptive { max, .. }) => InputValue::from(*max),
+                ("Value", TileSize::Fixed(v)) => InputValue::from(*v),
+                _ => continue,
+            };
+
+            commands.trigger(BackOriginalInput { entity, value });
+        }
+    }
 }
 
 pub fn spawn_tile_size_controls(tile_size: &TileSize, commands: &mut Commands) -> [Entity; 2] {

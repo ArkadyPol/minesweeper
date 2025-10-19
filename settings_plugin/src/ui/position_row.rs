@@ -5,7 +5,6 @@ use bevy::{
     ui::Checked,
     ui_widgets::{RadioButton, RadioGroup, ValueChange, observe},
 };
-use ron::to_string;
 
 use crate::{
     components::{Controlled, Controls, TextInput},
@@ -178,7 +177,7 @@ fn on_change_input(
     };
 
     change.label = Some("Board position".into());
-    change.value = InputValue::from(to_string(&board_pos).unwrap());
+    change.value = InputValue::from(ron::to_string(&board_pos).unwrap());
 }
 
 pub fn spawn_board_pos_controls(pos: &BoardPosition, commands: &mut Commands) -> [Entity; 2] {

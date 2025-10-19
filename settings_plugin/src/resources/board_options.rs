@@ -128,7 +128,7 @@ impl BoardOptions {
         Ok(())
     }
 
-    pub fn get_area(width: u16, height: u16) -> Result<u16, String> {
+    fn get_area(width: u16, height: u16) -> Result<u16, String> {
         width.checked_mul(height).ok_or("Area is too big!".into())
     }
 
@@ -150,6 +150,32 @@ impl BoardOptions {
         }
 
         self.tile_padding = tile_padding;
+        Ok(())
+    }
+
+    pub fn set_tile_size(&mut self, tile_size: TileSize) -> Result<(), String> {
+        match tile_size {
+            TileSize::Fixed(v) => {
+                if v <= self.tile_padding {
+                    return Err("Fixed value is too small!".into());
+                }
+            }
+            TileSize::Adaptive { min, max } => {
+                if min >= max {
+                    return Err("Min value must be less than max".into());
+                }
+
+                if max <= self.tile_padding {
+                    return Err("Max value is too small!".into());
+                }
+
+                if min <= 0.0 {
+                    return Err("Min value must be positive!".into());
+                }
+            }
+        }
+
+        self.tile_size = tile_size;
         Ok(())
     }
 }
