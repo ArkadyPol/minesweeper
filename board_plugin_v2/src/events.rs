@@ -7,8 +7,8 @@ use bevy::{
 pub struct TileTriggerEvent(pub Entity);
 #[derive(Debug, Copy, Clone, Event)]
 pub struct BoardCompletedEvent;
-#[derive(Debug, Copy, Clone, Event)]
-pub struct BombExplosionEvent;
+#[derive(Debug, Copy, Clone, EntityEvent)]
+pub struct BombExplosionEvent(pub Entity);
 #[derive(Debug, Copy, Clone, EntityEvent)]
 pub struct TileMarkEvent {
     pub entity: Entity,

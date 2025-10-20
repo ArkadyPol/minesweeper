@@ -31,7 +31,9 @@ pub fn uncover_tiles(
         // we destroy the tile cover entity
         commands.entity(entity).despawn();
 
-        let (neighbors, bomb, bomb_counter) = match parents.get(parent.0) {
+        let parent_entity = parent.parent();
+
+        let (neighbors, bomb, bomb_counter) = match parents.get(parent_entity) {
             Ok(v) => v,
             Err(e) => {
                 log::error!("{}", e);
@@ -41,7 +43,7 @@ pub fn uncover_tiles(
 
         if bomb.is_some() {
             log::info!("Boom !");
-            commands.trigger(BombExplosionEvent);
+            commands.trigger(BombExplosionEvent(parent_entity));
             return;
         }
 

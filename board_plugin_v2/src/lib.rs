@@ -17,6 +17,7 @@ use resources::{Board, BoardObservers};
 use settings_plugin::resources::{BoardAssets, BoardOptions, BoardPosition, TileSize};
 use systems::{
     input::input_handling,
+    lose::uncover_tiles_on_lose,
     mark::mark_tiles,
     uncover::{on_uncover_handler, trigger_event_handler, uncover_tiles},
     win::uncover_bombs_on_win,
@@ -119,6 +120,7 @@ impl<T, U> BoardPluginV2<T, U> {
             commands.add_observer(mark_tiles).id(),
             commands.add_observer(on_uncover_handler).id(),
             commands.add_observer(uncover_bombs_on_win).id(),
+            commands.add_observer(uncover_tiles_on_lose).id(),
         ];
 
         commands.insert_resource(Board {
