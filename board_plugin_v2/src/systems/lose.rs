@@ -5,7 +5,7 @@ use bevy::{
 
 use crate::{
     components::{Bomb, Flag, TileCover},
-    events::BombExplosionEvent,
+    events::{BombExplosionEvent, GameEndEvent},
 };
 
 pub fn uncover_tiles_on_lose(
@@ -42,4 +42,8 @@ pub fn uncover_tiles_on_lose(
     for cover in covers {
         commands.entity(cover).despawn();
     }
+
+    commands.trigger(GameEndEvent {
+        message: "You lose!".into(),
+    });
 }

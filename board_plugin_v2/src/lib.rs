@@ -1,7 +1,8 @@
 pub mod components;
-mod events;
+pub mod events;
 pub mod resources;
 mod systems;
+mod traits;
 
 use bevy::{
     log,
@@ -11,11 +12,12 @@ use bevy::{
 };
 use rand::{rng, seq::SliceRandom};
 
-use components::{Bomb, BombNeighbor, Coordinates, Neighbors, TileCover, Uncover};
-use events::TileMarkEvent;
+use components::{Bomb, BombNeighbor, Coordinates, EndMessage, Neighbors, TileCover, Uncover};
+use events::{RestartGameEvent, TileMarkEvent};
 use resources::{Board, BoardObservers};
 use settings_plugin::resources::{BoardAssets, BoardOptions, BoardPosition, TileSize};
 use systems::{
+    end::{on_game_end, show_message, tick_count_down},
     input::input_handling,
     lose::uncover_tiles_on_lose,
     mark::mark_tiles,
@@ -41,9 +43,11 @@ impl<T: ComputedStates, U: States> Plugin for BoardPluginV2<T, U> {
         // We handle uncovering even if the state is inactive
         .add_systems(
             Update,
-            (uncover_tiles).run_if(in_state(self.running_state.clone())),
+            (uncover_tiles, show_message, tick_count_down)
+                .run_if(in_state(self.running_state.clone())),
         )
         .add_systems(OnExit(self.running_state.clone()), Self::cleanup_board);
+        app.add_message::<RestartGameEvent>();
         log::info!("Loaded Board Plugin");
     }
 }
@@ -121,12 +125,15 @@ impl<T, U> BoardPluginV2<T, U> {
             commands.add_observer(on_uncover_handler).id(),
             commands.add_observer(uncover_bombs_on_win).id(),
             commands.add_observer(uncover_tiles_on_lose).id(),
+            commands.add_observer(on_game_end).id(),
         ];
 
         commands.insert_resource(Board {
             tile_size,
             entity: board_entity,
             observers,
+            timer: None,
+            end_message: "".into(),
         });
     }
 
@@ -308,12 +315,20 @@ impl<T, U> BoardPluginV2<T, U> {
         }
     }
 
-    fn cleanup_board(board: Res<Board>, mut commands: Commands) {
+    fn cleanup_board(
+        board: Res<Board>,
+        mut commands: Commands,
+        end_message: Query<Entity, With<EndMessage>>,
+    ) {
         commands.entity(board.entity).despawn();
         for &observer in &board.observers {
             commands.entity(observer).despawn();
         }
         commands.remove_resource::<Board>();
+
+        if let Ok(end_message_entity) = end_message.single() {
+            commands.entity(end_message_entity).despawn();
+        }
     }
 
     fn init_observers(mut commands: Commands) {

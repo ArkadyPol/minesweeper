@@ -1,7 +1,6 @@
-use bevy::{
-    ecs::{query::QueryData, relationship::DescendantIter, traversal::Traversal},
-    prelude::*,
-};
+use bevy::{ecs::relationship::DescendantIter, prelude::*};
+
+use crate::traits::{DescendantsTraversal, HasDescendants};
 
 #[derive(Debug, Copy, Clone, EntityEvent)]
 pub struct TileTriggerEvent(pub Entity);
@@ -15,25 +14,24 @@ pub struct TileMarkEvent {
     pub mark: bool,
 }
 
-#[derive(QueryData)]
-pub struct ChildrenTraversal;
-impl Traversal<PropagateUncoverEvent> for ChildrenTraversal {
-    fn traverse(_item: Self::Item<'_, '_>, event: &PropagateUncoverEvent) -> Option<Entity> {
-        if event.entity == event.original {
-            event.descendants.get(0).copied()
-        } else {
-            let pos = event.descendants.iter().position(|&e| e == event.entity)?;
-            event.descendants.get(pos + 1).copied()
-        }
-    }
-}
-
 #[derive(Debug, Clone, EntityEvent)]
-#[entity_event(propagate = ChildrenTraversal, auto_propagate)]
+#[entity_event(propagate = DescendantsTraversal, auto_propagate)]
 pub struct PropagateUncoverEvent {
     pub entity: Entity,
     original: Entity,
     descendants: Vec<Entity>,
+}
+
+impl HasDescendants for PropagateUncoverEvent {
+    fn entity(&self) -> Entity {
+        self.entity
+    }
+    fn original(&self) -> Entity {
+        self.original
+    }
+    fn descendants(&self) -> &[Entity] {
+        &self.descendants
+    }
 }
 
 impl PropagateUncoverEvent {
@@ -46,3 +44,44 @@ impl PropagateUncoverEvent {
         }
     }
 }
+
+#[derive(Debug, Clone, Event)]
+pub struct GameEndEvent {
+    pub message: String,
+}
+
+#[derive(Debug, Clone, EntityEvent)]
+#[entity_event(propagate = DescendantsTraversal, auto_propagate)]
+pub struct CountdownEvent {
+    pub entity: Entity,
+    pub remaining: u8,
+    original: Entity,
+    descendants: Vec<Entity>,
+}
+
+impl CountdownEvent {
+    pub fn new(entity: Entity, remaining: u8, children_query: &Query<&Children>) -> Self {
+        let descendants = DescendantIter::new(children_query, entity).collect();
+        Self {
+            entity,
+            remaining,
+            original: entity,
+            descendants,
+        }
+    }
+}
+
+impl HasDescendants for CountdownEvent {
+    fn entity(&self) -> Entity {
+        self.entity
+    }
+    fn original(&self) -> Entity {
+        self.original
+    }
+    fn descendants(&self) -> &[Entity] {
+        &self.descendants
+    }
+}
+
+#[derive(Debug, Copy, Clone, Message)]
+pub struct RestartGameEvent;

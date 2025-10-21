@@ -1,4 +1,5 @@
 use bevy::{log, prelude::*, ui_widgets::UiWidgetsPlugins};
+use board_plugin_v2::events::RestartGameEvent;
 use main_menu_plugin::{MainMenuPlugin, events::LoadSettingsEvent};
 use settings_plugin::{
     SettingsPlugin,
@@ -96,7 +97,15 @@ fn main() {
     // Startup system (cameras) & board
     app.add_systems(Startup, camera_setup);
     // State handling
-    app.add_systems(Update, (handle_state_game_events, state_handler).chain());
+    app.add_systems(
+        Update,
+        (
+            handle_state_game_events,
+            handle_restart_game_event,
+            state_handler,
+        )
+            .chain(),
+    );
 
     // Run the app
     app.run();
@@ -164,5 +173,17 @@ fn handle_state_game_events(
     for _ev in back_to_menu_reader.read() {
         log::info!("back to menu");
         next_state.set(AppState::MainMenu);
+    }
+}
+
+fn handle_restart_game_event(
+    mut create_game_writer: MessageWriter<CreateGameEvent>,
+    mut restart_game_reader: MessageReader<RestartGameEvent>,
+    mut next_state: ResMut<NextState<AppState>>,
+) {
+    for _ev in restart_game_reader.read() {
+        log::info!("restart game");
+        next_state.set(AppState::Out);
+        create_game_writer.write(CreateGameEvent);
     }
 }
