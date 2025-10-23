@@ -179,7 +179,6 @@ impl<T, U> BoardPluginV2<T, U> {
 
         for (entity, neighbors) in entities.iter().skip(bomb_count).copied() {
             let count = neighbors
-                .neighbors
                 .iter()
                 .flatten()
                 .filter(|&e| bomb_entities.contains(e))
@@ -311,7 +310,7 @@ impl<T, U> BoardPluginV2<T, U> {
             let neighbors = SQUARE_COORDINATES
                 .map(|tuple| coords + tuple)
                 .map(|c| coords_map.get(&c).copied());
-            commands.entity(entity).insert(Neighbors { neighbors });
+            commands.entity(entity).insert(Neighbors(neighbors));
         }
     }
 

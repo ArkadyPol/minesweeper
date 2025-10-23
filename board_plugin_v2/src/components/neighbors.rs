@@ -1,4 +1,4 @@
-use bevy::prelude::{Component, Entity};
+use bevy::prelude::{Component, Deref, Entity};
 
 #[cfg(feature = "debug")]
 use bevy::prelude::ReflectComponent;
@@ -9,7 +9,5 @@ use bevy_inspector_egui::prelude::ReflectInspectorOptions;
     derive(bevy_inspector_egui::InspectorOptions, bevy::reflect::Reflect),
     reflect(Component, InspectorOptions)
 )]
-#[derive(Debug, Component)]
-pub struct Neighbors {
-    pub neighbors: [Option<Entity>; 8],
-}
+#[derive(Debug, Deref, Component)]
+pub struct Neighbors(pub [Option<Entity>; 8]);

@@ -56,7 +56,7 @@ pub fn uncover_tiles(
         if bomb_counter.is_none() {
             // .. We propagate the uncovering by adding the `Uncover` component to adjacent tiles
             // which will then be removed next frame
-            for neighbor_entity in neighbors.neighbors.iter().flatten() {
+            for neighbor_entity in neighbors.iter().flatten() {
                 commands.trigger(PropagateUncoverEvent::new(
                     *neighbor_entity,
                     &children_query,
