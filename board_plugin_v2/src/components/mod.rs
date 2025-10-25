@@ -4,7 +4,7 @@ pub use coordinates::Coordinates;
 pub use countdown_timer::CountdownTimer;
 pub use end_message::EndMessage;
 pub use flag::Flag;
-pub use neighbors::Neighbors;
+pub use neighbors::*;
 pub use tile_cover::TileCover;
 pub use uncover::Uncover;
 

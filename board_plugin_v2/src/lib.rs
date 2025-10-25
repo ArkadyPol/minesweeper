@@ -12,7 +12,10 @@ use bevy::{
 };
 use rand::{rng, seq::SliceRandom};
 
-use components::{Bomb, BombNeighbor, Coordinates, EndMessage, Neighbors, TileCover, Uncover};
+use components::{
+    Bomb, BombNeighbor, Center, Coordinates, EndMessage, LevelDown, LevelUp, NeighborOf, Neighbors,
+    Neighbors2, TileCover, Uncover, VirtualCenter,
+};
 use events::{RestartGameEvent, TileMarkEvent};
 use resources::{Board, BoardObservers};
 use settings_plugin::resources::{BoardAssets, BoardOptions, BoardPosition, TileSize};
@@ -35,7 +38,7 @@ impl<T: ComputedStates, U: States> Plugin for BoardPluginV2<T, U> {
         // When the running states comes into the stack we load a board
         app.add_systems(
             OnEnter(self.running_state.clone()),
-            (Self::create_board, Self::set_bombs).chain(),
+            (Self::create_board, Self::set_bombs, Self::check_neighbors).chain(),
         )
         // We handle input and trigger events only if the state is active
         .add_systems(OnEnter(self.not_pause.clone()), Self::init_observers)
@@ -97,7 +100,7 @@ impl<T, U> BoardPluginV2<T, U> {
             &mut coords_map,
         );
 
-        Self::assign_neighbors(&coords_map, &mut commands);
+        let virtual_centers = Self::assign_neighbors(&coords_map, &mut commands, options.map_size);
 
         let board_entity = commands
             .spawn((
@@ -116,6 +119,7 @@ impl<T, U> BoardPluginV2<T, U> {
                         Transform::from_xyz(board_size.x / 2., board_size.y / 2., 0.),
                     )),
                     WithRelated::new(coords_map.into_values()),
+                    WithRelated::new(virtual_centers),
                 )),
             ))
             .id();
@@ -285,33 +289,81 @@ impl<T, U> BoardPluginV2<T, U> {
         )
     }
 
-    fn assign_neighbors(coords_map: &HashMap<Coordinates, Entity>, commands: &mut Commands) {
-        /// Delta coordinates for all 8 square neighbors
-        const SQUARE_COORDINATES: [(i8, i8); 8] = [
-            // Bottom left
-            (-1, -1),
-            // Bottom
-            (0, -1),
-            // Bottom right
-            (1, -1),
-            // Left
-            (-1, 0),
-            // Right
-            (1, 0),
-            // Top Left
-            (-1, 1),
-            // Top
-            (0, 1),
-            // Top right
-            (1, 1),
-        ];
-
+    fn assign_neighbors(
+        coords_map: &HashMap<Coordinates, Entity>,
+        commands: &mut Commands,
+        (width, height): (u16, u16),
+    ) -> Vec<Entity> {
         for (&coords, &entity) in coords_map {
             let neighbors = SQUARE_COORDINATES
                 .map(|tuple| coords + tuple)
                 .map(|c| coords_map.get(&c).copied());
             commands.entity(entity).insert(Neighbors(neighbors));
         }
+
+        let mut virtual_centers = Vec::new();
+
+        let mut temp = coords_map.clone();
+        let mut divisor: u16 = 3;
+
+        while temp.len() > 1 {
+            let mut new_map = HashMap::new();
+            let level = divisor.ilog(3) as u8;
+
+            for y in 0..height.div_ceil(divisor) {
+                for x in 0..width.div_ceil(divisor) {
+                    let center = Coordinates {
+                        x: x * divisor + divisor / 2,
+                        y: y * divisor + divisor / 2,
+                    };
+
+                    let mut center_entity = temp.get(&center).copied().unwrap_or_else(|| {
+                        let entity = commands
+                            .spawn((
+                                Name::new(format!("Virtual Center ({}, {})", center.x, center.y)),
+                                center,
+                                VirtualCenter,
+                            ))
+                            .id();
+                        virtual_centers.push(entity);
+                        entity
+                    });
+
+                    if level > 1 {
+                        let center_up = commands
+                            .spawn((
+                                Name::new(format!(
+                                    "Level{} Center ({}, {})",
+                                    level, center.x, center.y
+                                )),
+                                center,
+                                VirtualCenter,
+                            ))
+                            .add_one_related::<LevelUp>(center_entity)
+                            .id();
+                        virtual_centers.push(center_up);
+                        center_entity = center_up;
+                    }
+
+                    commands.entity(center_entity).insert(Center(level));
+
+                    new_map.insert(center, center_entity);
+                    let neighbors =
+                        SQUARE_COORDINATES.map(|tuple| center + tuple * divisor as i32 / 3);
+
+                    for coords in neighbors {
+                        if let Some(&entity) = temp.get(&coords) {
+                            commands.entity(entity).insert(NeighborOf(center_entity));
+                        }
+                    }
+                }
+            }
+
+            temp = new_map;
+            divisor *= 3;
+        }
+
+        virtual_centers
     }
 
     fn cleanup_board(
@@ -348,4 +400,183 @@ impl<T, U> BoardPluginV2<T, U> {
         commands.entity(tile_trigger_observer).despawn();
         commands.remove_resource::<BoardObservers>();
     }
+
+    fn check_neighbors(
+        query_neighbors: Query<(Entity, &Neighbors)>,
+        query_coordinates: Query<&Coordinates, Without<VirtualCenter>>,
+        query_neighbors_2: Query<(&Neighbors2, &Coordinates, &Center)>,
+        query_neighbor_of: Query<(&NeighborOf, &Coordinates)>,
+        query_level_up: Query<&LevelUp>,
+        query_level_down: Query<&LevelDown>,
+    ) {
+        for (entity, neighbors) in query_neighbors {
+            let neighbors: Vec<Entity> = neighbors.iter().flatten().copied().collect();
+            let neighbors_2 = Self::find_neighbors(
+                entity,
+                &query_neighbors_2,
+                &query_neighbor_of,
+                &query_coordinates,
+                &query_level_up,
+                &query_level_down,
+            );
+
+            if neighbors != neighbors_2 {
+                if let Ok(coords) = query_coordinates.get(entity) {
+                    println!("--{}--", coords);
+                }
+                for i in 0..neighbors.len().max(neighbors_2.len()) {
+                    let n_coords = neighbors
+                        .get(i)
+                        .and_then(|&e| query_coordinates.get(e).ok());
+                    let n_coords_2 = neighbors_2
+                        .get(i)
+                        .and_then(|&e| query_coordinates.get(e).ok());
+                    match (n_coords, n_coords_2) {
+                        (Some(c1), Some(c2)) => println!("{} / {}", c1, c2),
+                        (Some(c1), None) => println!("{} / None", c1),
+                        (None, Some(c2)) => println!("None / {}", c2),
+                        (None, None) => println!("None / None"),
+                    }
+                }
+            }
+        }
+    }
+
+    fn find_neighbors(
+        entity: Entity,
+        query_neighbors: &Query<(&Neighbors2, &Coordinates, &Center)>,
+        query_neighbor_of: &Query<(&NeighborOf, &Coordinates)>,
+        query_coordinates: &Query<&Coordinates, Without<VirtualCenter>>,
+        query_level_up: &Query<&LevelUp>,
+        query_level_down: &Query<&LevelDown>,
+    ) -> Vec<Entity> {
+        if let Ok((neighbors, _, _)) = query_neighbors.get(entity) {
+            return neighbors.iter().collect();
+        }
+
+        if let Ok((neighbor_of, coords)) = query_neighbor_of.get(entity) {
+            let mut entities = Vec::new();
+            let neighbors = SQUARE_COORDINATES.map(|tuple| *coords + tuple);
+
+            let center_entity = neighbor_of.0;
+
+            for neighbor in neighbors {
+                if let Some(neighbor_entity) = Self::find_coordinate(
+                    neighbor,
+                    center_entity,
+                    query_coordinates,
+                    query_neighbors,
+                    query_neighbor_of,
+                    query_level_up,
+                    query_level_down,
+                ) {
+                    entities.push(neighbor_entity);
+                }
+            }
+
+            return entities;
+        }
+
+        vec![]
+    }
+
+    fn find_coordinate(
+        coords: Coordinates,
+        center_entity: Entity,
+        query_coordinates: &Query<&Coordinates, Without<VirtualCenter>>,
+        query_neighbors: &Query<(&Neighbors2, &Coordinates, &Center)>,
+        query_neighbor_of: &Query<(&NeighborOf, &Coordinates)>,
+        query_level_up: &Query<&LevelUp>,
+        query_level_down: &Query<&LevelDown>,
+    ) -> Option<Entity> {
+        if let Ok(&center_coords) = query_coordinates.get(center_entity) {
+            if coords == center_coords {
+                return Some(center_entity);
+            }
+        }
+
+        if let Ok((neighbors, _, _)) = query_neighbors.get(center_entity) {
+            for neighbor_entity in neighbors.iter() {
+                if let Ok(&n_coords) = query_coordinates.get(neighbor_entity) {
+                    if coords == n_coords {
+                        return Some(neighbor_entity);
+                    }
+                }
+            }
+        }
+
+        if let Some(parent_entity) = query_neighbor_of
+            .get(center_entity)
+            .ok()
+            .map(|(n, _)| n.0)
+            .or_else(|| query_level_up.get(center_entity).ok().map(|l| l.0))
+        {
+            if let Ok((neighbors, _, _)) = query_neighbors.get(parent_entity) {
+                for neighbor_entity in neighbors.iter() {
+                    if neighbor_entity == center_entity {
+                        continue;
+                    }
+
+                    if let Ok((_, &n_coords, level)) = query_neighbors.get(neighbor_entity) {
+                        let bounds = IRect::from_center_size(n_coords.into(), level.get_size());
+                        if bounds.contains(coords.into()) {
+                            return Self::find_coordinate(
+                                coords,
+                                neighbor_entity,
+                                query_coordinates,
+                                query_neighbors,
+                                query_neighbor_of,
+                                query_level_up,
+                                query_level_down,
+                            );
+                        }
+                    }
+                }
+            }
+
+            if let Ok(level_down) = query_level_down.get(parent_entity) {
+                let child_entity = level_down.entity();
+                if child_entity == center_entity {
+                    return None;
+                }
+
+                if let Ok((_, &n_coords, level)) = query_neighbors.get(child_entity) {
+                    let bounds = IRect::from_center_size(n_coords.into(), level.get_size());
+                    if bounds.contains(coords.into()) {
+                        return Self::find_coordinate(
+                            coords,
+                            child_entity,
+                            query_coordinates,
+                            query_neighbors,
+                            query_neighbor_of,
+                            query_level_up,
+                            query_level_down,
+                        );
+                    }
+                }
+            }
+        }
+
+        None
+    }
 }
+
+/// Delta coordinates for all 8 square neighbors
+const SQUARE_COORDINATES: [IVec2; 8] = [
+    // Bottom left
+    IVec2::new(-1, -1),
+    // Bottom
+    IVec2::new(0, -1),
+    // Bottom right
+    IVec2::new(1, -1),
+    // Left
+    IVec2::new(-1, 0),
+    // Right
+    IVec2::new(1, 0),
+    // Top Left
+    IVec2::new(-1, 1),
+    // Top
+    IVec2::new(0, 1),
+    // Top right
+    IVec2::new(1, 1),
+];

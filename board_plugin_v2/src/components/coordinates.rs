@@ -1,4 +1,4 @@
-use bevy::prelude::Component;
+use bevy::prelude::*;
 use std::fmt::{self, Display, Formatter};
 use std::ops::Add;
 
@@ -24,6 +24,22 @@ impl Add<(i8, i8)> for Coordinates {
         let x = ((self.x as i16) + x as i16) as u16;
         let y = ((self.y as i16) + y as i16) as u16;
         Self { x, y }
+    }
+}
+
+impl Add<IVec2> for Coordinates {
+    type Output = Self;
+
+    fn add(self, IVec2 { x, y }: IVec2) -> Self::Output {
+        let x = ((self.x as i16) + x as i16) as u16;
+        let y = ((self.y as i16) + y as i16) as u16;
+        Self { x, y }
+    }
+}
+
+impl Into<IVec2> for Coordinates {
+    fn into(self) -> IVec2 {
+        IVec2::new(self.x as i32, self.y as i32)
     }
 }
 
