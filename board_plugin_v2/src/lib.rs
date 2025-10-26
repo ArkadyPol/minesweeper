@@ -38,7 +38,7 @@ impl<T: ComputedStates, U: States> Plugin for BoardPluginV2<T, U> {
         // When the running states comes into the stack we load a board
         app.add_systems(
             OnEnter(self.running_state.clone()),
-            (Self::create_board, Self::set_bombs, Self::check_neighbors).chain(),
+            (Self::create_board, Self::set_bombs).chain(),
         )
         // We handle input and trigger events only if the state is active
         .add_systems(OnEnter(self.not_pause.clone()), Self::init_observers)
@@ -143,12 +143,20 @@ impl<T, U> BoardPluginV2<T, U> {
 
     /// Places bombs and bomb neighbor tiles
     fn set_bombs(
-        query: Query<(Entity, &Neighbors, &Children), With<Coordinates>>,
+        query: Query<(Entity, &Children), With<Coordinates>>,
         cover_query: Query<(), With<TileCover>>,
         mut commands: Commands,
         board_options: Option<Res<BoardOptions>>,
         board_assets: Res<BoardAssets>,
         board: Res<Board>,
+        query_neighbors_2: Query<(
+            Option<&Neighbors2>,
+            Option<&LevelDown>,
+            &Coordinates,
+            &Center,
+            Has<VirtualCenter>,
+        )>,
+        query_neighbor_of: Query<(Option<&NeighborOf>, Option<&LevelUp>, &Coordinates)>,
     ) {
         let mut rng = rng();
         let options = match board_options {
@@ -159,13 +167,12 @@ impl<T, U> BoardPluginV2<T, U> {
         let padding = options.tile_padding;
         let size = board.tile_size;
 
-        let mut entities: Vec<(Entity, &Neighbors)> =
-            query.iter().map(|(e, n, _)| (e, n)).collect();
+        let mut entities: Vec<Entity> = query.iter().map(|(e, _)| e).collect();
         entities.shuffle(&mut rng);
         let mut bomb_entities = HashSet::new();
 
         for i in 0..bomb_count {
-            if let Some((entity, _)) = entities.get(i) {
+            if let Some(entity) = entities.get(i) {
                 commands.entity(*entity).insert(Bomb).with_child((
                     Sprite {
                         color: board_assets.bomb_material.color,
@@ -181,10 +188,9 @@ impl<T, U> BoardPluginV2<T, U> {
 
         let mut safe_start = None;
 
-        for (entity, neighbors) in entities.iter().skip(bomb_count).copied() {
-            let count = neighbors
+        for entity in entities.iter().skip(bomb_count).copied() {
+            let count = find_neighbors(entity, &query_neighbors_2, &query_neighbor_of)
                 .iter()
-                .flatten()
                 .filter(|&e| bomb_entities.contains(e))
                 .count() as u8;
 
@@ -203,7 +209,7 @@ impl<T, U> BoardPluginV2<T, U> {
         }
         if options.safe_start {
             if let Some(entity) = safe_start {
-                let (_, _, children) = query.get(entity).unwrap();
+                let (_, children) = query.get(entity).unwrap();
                 for &child in children {
                     if cover_query.get(child).is_ok() {
                         commands.entity(child).insert(Uncover);
@@ -403,22 +409,19 @@ impl<T, U> BoardPluginV2<T, U> {
 
     fn check_neighbors(
         query_neighbors: Query<(Entity, &Neighbors)>,
-        query_coordinates: Query<&Coordinates, Without<VirtualCenter>>,
-        query_neighbors_2: Query<(&Neighbors2, &Coordinates, &Center)>,
-        query_neighbor_of: Query<(&NeighborOf, &Coordinates)>,
-        query_level_up: Query<&LevelUp>,
-        query_level_down: Query<&LevelDown>,
+        query_neighbors_2: Query<(
+            Option<&Neighbors2>,
+            Option<&LevelDown>,
+            &Coordinates,
+            &Center,
+            Has<VirtualCenter>,
+        )>,
+        query_neighbor_of: Query<(Option<&NeighborOf>, Option<&LevelUp>, &Coordinates)>,
+        query_coordinates: Query<&Coordinates>,
     ) {
         for (entity, neighbors) in query_neighbors {
             let neighbors: Vec<Entity> = neighbors.iter().flatten().copied().collect();
-            let neighbors_2 = Self::find_neighbors(
-                entity,
-                &query_neighbors_2,
-                &query_neighbor_of,
-                &query_coordinates,
-                &query_level_up,
-                &query_level_down,
-            );
+            let neighbors_2 = find_neighbors(entity, &query_neighbors_2, &query_neighbor_of);
 
             if neighbors != neighbors_2 {
                 if let Ok(coords) = query_coordinates.get(entity) {
@@ -441,163 +444,152 @@ impl<T, U> BoardPluginV2<T, U> {
             }
         }
     }
+}
 
-    fn find_neighbors(
-        entity: Entity,
-        query_neighbors: &Query<(&Neighbors2, &Coordinates, &Center)>,
-        query_neighbor_of: &Query<(&NeighborOf, &Coordinates)>,
-        query_coordinates: &Query<&Coordinates, Without<VirtualCenter>>,
-        query_level_up: &Query<&LevelUp>,
-        query_level_down: &Query<&LevelDown>,
-    ) -> Vec<Entity> {
-        if let Ok((neighbors, _, _)) = query_neighbors.get(entity) {
-            return neighbors.iter().collect();
+pub fn find_neighbors(
+    entity: Entity,
+    query_neighbors: &Query<(
+        Option<&Neighbors2>,
+        Option<&LevelDown>,
+        &Coordinates,
+        &Center,
+        Has<VirtualCenter>,
+    )>,
+    query_neighbor_of: &Query<(Option<&NeighborOf>, Option<&LevelUp>, &Coordinates)>,
+) -> Vec<Entity> {
+    if let Ok((Some(neighbors), _, _, _, _)) = query_neighbors.get(entity) {
+        return neighbors.iter().collect();
+    }
+
+    if let Ok((Some(neighbor_of), _, coords)) = query_neighbor_of.get(entity) {
+        let mut entities = Vec::new();
+        let neighbors = SQUARE_COORDINATES.map(|tuple| *coords + tuple);
+
+        let center_entity = neighbor_of.0;
+
+        for neighbor in neighbors {
+            if let Some(neighbor_entity) = find_coordinate(
+                neighbor,
+                center_entity,
+                None,
+                query_neighbors,
+                query_neighbor_of,
+            ) {
+                entities.push(neighbor_entity);
+            }
         }
 
-        if let Ok((neighbor_of, coords)) = query_neighbor_of.get(entity) {
-            let mut entities = Vec::new();
-            let neighbors = SQUARE_COORDINATES.map(|tuple| *coords + tuple);
+        return entities;
+    }
 
-            let center_entity = neighbor_of.0;
+    vec![]
+}
 
-            for neighbor in neighbors {
-                if let Some(neighbor_entity) = Self::find_coordinate(
-                    neighbor,
-                    center_entity,
-                    None,
-                    query_coordinates,
-                    query_neighbors,
-                    query_neighbor_of,
-                    query_level_up,
-                    query_level_down,
-                ) {
-                    entities.push(neighbor_entity);
+fn find_coordinate(
+    coords: Coordinates,
+    center_entity: Entity,
+    previous_entity: Option<Entity>,
+    query_neighbors: &Query<(
+        Option<&Neighbors2>,
+        Option<&LevelDown>,
+        &Coordinates,
+        &Center,
+        Has<VirtualCenter>,
+    )>,
+    query_neighbor_of: &Query<(Option<&NeighborOf>, Option<&LevelUp>, &Coordinates)>,
+) -> Option<Entity> {
+    if let Ok((_, _, &center_coords, _, is_virtual)) = query_neighbors.get(center_entity) {
+        if !is_virtual && coords == center_coords {
+            return Some(center_entity);
+        }
+    }
+
+    if let Ok((Some(neighbors), _, _, _, _)) = query_neighbors.get(center_entity) {
+        for neighbor_entity in neighbors.iter() {
+            if Some(neighbor_entity) == previous_entity {
+                continue;
+            }
+
+            if let Ok((_, _, &n_coords)) = query_neighbor_of.get(neighbor_entity) {
+                if coords == n_coords {
+                    return Some(neighbor_entity);
                 }
             }
 
-            return entities;
-        }
-
-        vec![]
-    }
-
-    fn find_coordinate(
-        coords: Coordinates,
-        center_entity: Entity,
-        previous_entity: Option<Entity>,
-        query_coordinates: &Query<&Coordinates, Without<VirtualCenter>>,
-        query_neighbors: &Query<(&Neighbors2, &Coordinates, &Center)>,
-        query_neighbor_of: &Query<(&NeighborOf, &Coordinates)>,
-        query_level_up: &Query<&LevelUp>,
-        query_level_down: &Query<&LevelDown>,
-    ) -> Option<Entity> {
-        if let Ok(&center_coords) = query_coordinates.get(center_entity) {
-            if coords == center_coords {
-                return Some(center_entity);
+            if let Ok((_, _, &n_coords, level, _)) = query_neighbors.get(neighbor_entity) {
+                let bounds = IRect::from_center_size(n_coords.into(), level.get_size());
+                if bounds.contains(coords.into()) {
+                    return find_coordinate(
+                        coords,
+                        neighbor_entity,
+                        Some(center_entity),
+                        query_neighbors,
+                        query_neighbor_of,
+                    );
+                }
             }
         }
+    }
 
-        if let Ok((neighbors, _, _)) = query_neighbors.get(center_entity) {
+    if let Ok((neighbor_of, level_up, _)) = query_neighbor_of.get(center_entity) {
+        let Some(parent_entity) = neighbor_of.map(|n| n.0).or_else(|| level_up.map(|l| l.0)) else {
+            return None;
+        };
+        if let Ok((Some(neighbors), _, _, _, _)) = query_neighbors.get(parent_entity) {
             for neighbor_entity in neighbors.iter() {
-                if Some(neighbor_entity) == previous_entity {
+                if neighbor_entity == center_entity {
                     continue;
                 }
 
-                if let Ok(&n_coords) = query_coordinates.get(neighbor_entity) {
-                    if coords == n_coords {
-                        return Some(neighbor_entity);
-                    }
-                }
-
-                if let Ok((_, &n_coords, level)) = query_neighbors.get(neighbor_entity) {
+                if let Ok((_, _, &n_coords, level, _)) = query_neighbors.get(neighbor_entity) {
                     let bounds = IRect::from_center_size(n_coords.into(), level.get_size());
                     if bounds.contains(coords.into()) {
-                        return Self::find_coordinate(
+                        return find_coordinate(
                             coords,
                             neighbor_entity,
                             Some(center_entity),
-                            query_coordinates,
                             query_neighbors,
                             query_neighbor_of,
-                            query_level_up,
-                            query_level_down,
                         );
                     }
                 }
             }
         }
 
-        if let Some(parent_entity) = query_neighbor_of
-            .get(center_entity)
-            .ok()
-            .map(|(n, _)| n.0)
-            .or_else(|| query_level_up.get(center_entity).ok().map(|l| l.0))
-        {
-            if let Ok((neighbors, _, _)) = query_neighbors.get(parent_entity) {
-                for neighbor_entity in neighbors.iter() {
-                    if neighbor_entity == center_entity {
-                        continue;
-                    }
-
-                    if let Ok((_, &n_coords, level)) = query_neighbors.get(neighbor_entity) {
-                        let bounds = IRect::from_center_size(n_coords.into(), level.get_size());
-                        if bounds.contains(coords.into()) {
-                            return Self::find_coordinate(
-                                coords,
-                                neighbor_entity,
-                                Some(center_entity),
-                                query_coordinates,
-                                query_neighbors,
-                                query_neighbor_of,
-                                query_level_up,
-                                query_level_down,
-                            );
-                        }
-                    }
-                }
-            }
-
-            if let Ok(level_down) = query_level_down.get(parent_entity) {
-                let child_entity = level_down.entity();
-                if child_entity == center_entity {
-                    return None;
-                }
-
-                if let Ok((_, &n_coords, level)) = query_neighbors.get(child_entity) {
-                    let bounds = IRect::from_center_size(n_coords.into(), level.get_size());
-                    if bounds.contains(coords.into()) {
-                        return Self::find_coordinate(
-                            coords,
-                            child_entity,
-                            Some(center_entity),
-                            query_coordinates,
-                            query_neighbors,
-                            query_neighbor_of,
-                            query_level_up,
-                            query_level_down,
-                        );
-                    }
-                }
-            }
-
-            if Some(parent_entity) == previous_entity {
+        if let Ok((_, Some(level_down), _, _, _)) = query_neighbors.get(parent_entity) {
+            let child_entity = level_down.entity();
+            if child_entity == center_entity {
                 return None;
             }
 
-            return Self::find_coordinate(
-                coords,
-                parent_entity,
-                Some(center_entity),
-                query_coordinates,
-                query_neighbors,
-                query_neighbor_of,
-                query_level_up,
-                query_level_down,
-            );
+            if let Ok((_, _, &n_coords, level, _)) = query_neighbors.get(child_entity) {
+                let bounds = IRect::from_center_size(n_coords.into(), level.get_size());
+                if bounds.contains(coords.into()) {
+                    return find_coordinate(
+                        coords,
+                        child_entity,
+                        Some(center_entity),
+                        query_neighbors,
+                        query_neighbor_of,
+                    );
+                }
+            }
         }
 
-        None
+        if Some(parent_entity) == previous_entity {
+            return None;
+        }
+
+        return find_coordinate(
+            coords,
+            parent_entity,
+            Some(center_entity),
+            query_neighbors,
+            query_neighbor_of,
+        );
     }
+
+    None
 }
 
 /// Delta coordinates for all 8 square neighbors

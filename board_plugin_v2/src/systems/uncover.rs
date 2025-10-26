@@ -2,8 +2,12 @@ use bevy::{log, prelude::*};
 
 use crate::{
     BoardOptions,
-    components::{Bomb, BombNeighbor, Neighbors, TileCover, Uncover},
+    components::{
+        Bomb, BombNeighbor, Center, Coordinates, LevelDown, LevelUp, NeighborOf, Neighbors2,
+        TileCover, Uncover, VirtualCenter,
+    },
     events::{BoardCompletedEvent, BombExplosionEvent, PropagateUncoverEvent, TileTriggerEvent},
+    find_neighbors,
 };
 
 pub fn trigger_event_handler(event: On<TileTriggerEvent>, mut commands: Commands) {
@@ -14,9 +18,17 @@ pub fn uncover_tiles(
     mut commands: Commands,
     children: Query<(Entity, &ChildOf), With<Uncover>>,
     children_query: Query<&Children>,
-    parents: Query<(&Neighbors, Option<&Bomb>, Option<&BombNeighbor>)>,
+    parents: Query<(Option<&Bomb>, Option<&BombNeighbor>)>,
     cover_query: Query<(), (With<TileCover>, Without<Uncover>)>,
     board_options: Option<Res<BoardOptions>>,
+    query_neighbors_2: Query<(
+        Option<&Neighbors2>,
+        Option<&LevelDown>,
+        &Coordinates,
+        &Center,
+        Has<VirtualCenter>,
+    )>,
+    query_neighbor_of: Query<(Option<&NeighborOf>, Option<&LevelUp>, &Coordinates)>,
 ) {
     let options = match board_options {
         None => BoardOptions::default(), // If no options is set we use the default one
@@ -33,7 +45,7 @@ pub fn uncover_tiles(
 
         let parent_entity = parent.parent();
 
-        let (neighbors, bomb, bomb_counter) = match parents.get(parent_entity) {
+        let (bomb, bomb_counter) = match parents.get(parent_entity) {
             Ok(v) => v,
             Err(e) => {
                 log::error!("{}", e);
@@ -56,11 +68,10 @@ pub fn uncover_tiles(
         if bomb_counter.is_none() {
             // .. We propagate the uncovering by adding the `Uncover` component to adjacent tiles
             // which will then be removed next frame
-            for neighbor_entity in neighbors.iter().flatten() {
-                commands.trigger(PropagateUncoverEvent::new(
-                    *neighbor_entity,
-                    &children_query,
-                ));
+            for neighbor_entity in
+                find_neighbors(parent_entity, &query_neighbors_2, &query_neighbor_of)
+            {
+                commands.trigger(PropagateUncoverEvent::new(neighbor_entity, &children_query));
             }
         }
     }
