@@ -464,6 +464,7 @@ impl<T, U> BoardPluginV2<T, U> {
                 if let Some(neighbor_entity) = Self::find_coordinate(
                     neighbor,
                     center_entity,
+                    None,
                     query_coordinates,
                     query_neighbors,
                     query_neighbor_of,
@@ -483,6 +484,7 @@ impl<T, U> BoardPluginV2<T, U> {
     fn find_coordinate(
         coords: Coordinates,
         center_entity: Entity,
+        previous_entity: Option<Entity>,
         query_coordinates: &Query<&Coordinates, Without<VirtualCenter>>,
         query_neighbors: &Query<(&Neighbors2, &Coordinates, &Center)>,
         query_neighbor_of: &Query<(&NeighborOf, &Coordinates)>,
@@ -497,9 +499,29 @@ impl<T, U> BoardPluginV2<T, U> {
 
         if let Ok((neighbors, _, _)) = query_neighbors.get(center_entity) {
             for neighbor_entity in neighbors.iter() {
+                if Some(neighbor_entity) == previous_entity {
+                    continue;
+                }
+
                 if let Ok(&n_coords) = query_coordinates.get(neighbor_entity) {
                     if coords == n_coords {
                         return Some(neighbor_entity);
+                    }
+                }
+
+                if let Ok((_, &n_coords, level)) = query_neighbors.get(neighbor_entity) {
+                    let bounds = IRect::from_center_size(n_coords.into(), level.get_size());
+                    if bounds.contains(coords.into()) {
+                        return Self::find_coordinate(
+                            coords,
+                            neighbor_entity,
+                            Some(center_entity),
+                            query_coordinates,
+                            query_neighbors,
+                            query_neighbor_of,
+                            query_level_up,
+                            query_level_down,
+                        );
                     }
                 }
             }
@@ -523,6 +545,7 @@ impl<T, U> BoardPluginV2<T, U> {
                             return Self::find_coordinate(
                                 coords,
                                 neighbor_entity,
+                                Some(center_entity),
                                 query_coordinates,
                                 query_neighbors,
                                 query_neighbor_of,
@@ -546,6 +569,7 @@ impl<T, U> BoardPluginV2<T, U> {
                         return Self::find_coordinate(
                             coords,
                             child_entity,
+                            Some(center_entity),
                             query_coordinates,
                             query_neighbors,
                             query_neighbor_of,
@@ -555,6 +579,21 @@ impl<T, U> BoardPluginV2<T, U> {
                     }
                 }
             }
+
+            if Some(parent_entity) == previous_entity {
+                return None;
+            }
+
+            return Self::find_coordinate(
+                coords,
+                parent_entity,
+                Some(center_entity),
+                query_coordinates,
+                query_neighbors,
+                query_neighbor_of,
+                query_level_up,
+                query_level_down,
+            );
         }
 
         None
