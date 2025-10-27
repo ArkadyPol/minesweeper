@@ -457,7 +457,7 @@ pub fn find_neighbors(
     )>,
     query_neighbor_of: &Query<(Option<&NeighborOf>, Option<&LevelUp>, &Coordinates)>,
 ) -> Vec<Entity> {
-    if let Ok((Some(neighbors), _, _, _, _)) = query_neighbors.get(entity) {
+    if let Ok((Some(neighbors), ..)) = query_neighbors.get(entity) {
         return neighbors.iter().collect();
     }
 
@@ -471,7 +471,7 @@ pub fn find_neighbors(
             if let Some(neighbor_entity) = find_coordinate(
                 neighbor,
                 center_entity,
-                None,
+                entity,
                 query_neighbors,
                 query_neighbor_of,
             ) {
@@ -488,7 +488,7 @@ pub fn find_neighbors(
 fn find_coordinate(
     coords: Coordinates,
     center_entity: Entity,
-    previous_entity: Option<Entity>,
+    source_entity: Entity,
     query_neighbors: &Query<(
         Option<&Neighbors2>,
         Option<&LevelDown>,
@@ -498,95 +498,59 @@ fn find_coordinate(
     )>,
     query_neighbor_of: &Query<(Option<&NeighborOf>, Option<&LevelUp>, &Coordinates)>,
 ) -> Option<Entity> {
-    if let Ok((_, _, &center_coords, _, is_virtual)) = query_neighbors.get(center_entity) {
+    let Ok((Some(neighbors), level_down, &center_coords, level, is_virtual)) =
+        query_neighbors.get(center_entity)
+    else {
+        return None;
+    };
+
+    if **level == 1 {
         if !is_virtual && coords == center_coords {
             return Some(center_entity);
         }
-    }
 
-    if let Ok((Some(neighbors), _, _, _, _)) = query_neighbors.get(center_entity) {
         for neighbor_entity in neighbors.iter() {
-            if Some(neighbor_entity) == previous_entity {
-                continue;
-            }
-
             if let Ok((_, _, &n_coords)) = query_neighbor_of.get(neighbor_entity) {
                 if coords == n_coords {
                     return Some(neighbor_entity);
                 }
             }
+        }
+    }
 
-            if let Ok((_, _, &n_coords, level, _)) = query_neighbors.get(neighbor_entity) {
-                let bounds = IRect::from_center_size(n_coords.into(), level.get_size());
-                if bounds.contains(coords.into()) {
-                    return find_coordinate(
-                        coords,
-                        neighbor_entity,
-                        Some(center_entity),
-                        query_neighbors,
-                        query_neighbor_of,
-                    );
-                }
+    let child_iter = neighbors
+        .iter()
+        .chain(level_down.into_iter().map(|l| l.entity()));
+
+    for child_entity in child_iter {
+        if child_entity == source_entity {
+            continue;
+        }
+
+        if let Ok((_, _, &n_coords, level, _)) = query_neighbors.get(child_entity) {
+            let bounds = IRect::from_center_size(n_coords.into(), level.get_size());
+            if bounds.contains(coords.into()) {
+                return find_coordinate(
+                    coords,
+                    child_entity,
+                    source_entity,
+                    query_neighbors,
+                    query_neighbor_of,
+                );
             }
         }
     }
 
     if let Ok((neighbor_of, level_up, _)) = query_neighbor_of.get(center_entity) {
-        let Some(parent_entity) = neighbor_of.map(|n| n.0).or_else(|| level_up.map(|l| l.0)) else {
-            return None;
+        if let Some(parent_entity) = neighbor_of.map(|n| n.0).or_else(|| level_up.map(|l| l.0)) {
+            return find_coordinate(
+                coords,
+                parent_entity,
+                center_entity,
+                query_neighbors,
+                query_neighbor_of,
+            );
         };
-        if let Ok((Some(neighbors), _, _, _, _)) = query_neighbors.get(parent_entity) {
-            for neighbor_entity in neighbors.iter() {
-                if neighbor_entity == center_entity {
-                    continue;
-                }
-
-                if let Ok((_, _, &n_coords, level, _)) = query_neighbors.get(neighbor_entity) {
-                    let bounds = IRect::from_center_size(n_coords.into(), level.get_size());
-                    if bounds.contains(coords.into()) {
-                        return find_coordinate(
-                            coords,
-                            neighbor_entity,
-                            Some(center_entity),
-                            query_neighbors,
-                            query_neighbor_of,
-                        );
-                    }
-                }
-            }
-        }
-
-        if let Ok((_, Some(level_down), _, _, _)) = query_neighbors.get(parent_entity) {
-            let child_entity = level_down.entity();
-            if child_entity == center_entity {
-                return None;
-            }
-
-            if let Ok((_, _, &n_coords, level, _)) = query_neighbors.get(child_entity) {
-                let bounds = IRect::from_center_size(n_coords.into(), level.get_size());
-                if bounds.contains(coords.into()) {
-                    return find_coordinate(
-                        coords,
-                        child_entity,
-                        Some(center_entity),
-                        query_neighbors,
-                        query_neighbor_of,
-                    );
-                }
-            }
-        }
-
-        if Some(parent_entity) == previous_entity {
-            return None;
-        }
-
-        return find_coordinate(
-            coords,
-            parent_entity,
-            Some(center_entity),
-            query_neighbors,
-            query_neighbor_of,
-        );
     }
 
     None
