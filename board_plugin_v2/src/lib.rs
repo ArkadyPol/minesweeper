@@ -691,16 +691,13 @@ fn find_intersecting(
             found.push(center_entity);
         }
 
-        let bounds = IRect::from_center_size(center_coords.into(), level.get_size());
-        let intersection = bounds.intersect(area);
-
         for neighbor_entity in neighbors.iter() {
             if neighbor_entity == source_entity {
                 continue;
             }
 
             if let Ok((_, _, &n_coords)) = query_neighbor_of.get(neighbor_entity) {
-                if intersection.contains(n_coords.into()) {
+                if area.contains(n_coords.into()) {
                     found.push(neighbor_entity);
                 }
             }
