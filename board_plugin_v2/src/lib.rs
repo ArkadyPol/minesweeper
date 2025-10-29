@@ -4,6 +4,8 @@ pub mod resources;
 mod systems;
 mod traits;
 
+use std::time::Instant;
+
 use bevy::{
     log,
     platform::collections::{HashMap, HashSet},
@@ -12,10 +14,7 @@ use bevy::{
 };
 use rand::{rng, seq::SliceRandom};
 
-use components::{
-    Bomb, BombNeighbor, Center, Coordinates, EndMessage, LevelDown, LevelUp, NeighborOf, Neighbors,
-    Neighbors2, TileCover, Uncover, VirtualCenter,
-};
+use components::{Bomb, BombNeighbor, Coordinates, EndMessage, TileCover, Uncover};
 use events::{RestartGameEvent, TileMarkEvent};
 use resources::{Board, BoardObservers};
 use settings_plugin::resources::{BoardAssets, BoardOptions, BoardPosition, TileSize};
@@ -28,6 +27,12 @@ use systems::{
     win::uncover_bombs_on_win,
 };
 
+#[cfg(feature = "simple_neighbors")]
+use components::Neighbors;
+
+#[cfg(feature = "hierarchical_neighbors")]
+use components::{Center, LevelDown, LevelUp, NeighborOf, Neighbors2, VirtualCenter};
+
 pub struct BoardPluginV2<T, U> {
     pub running_state: T,
     pub not_pause: U,
@@ -38,7 +43,13 @@ impl<T: ComputedStates, U: States> Plugin for BoardPluginV2<T, U> {
         // When the running states comes into the stack we load a board
         app.add_systems(
             OnEnter(self.running_state.clone()),
-            (Self::create_board, Self::set_bombs).chain(),
+            (
+                Self::create_board,
+                Self::set_bombs,
+                #[cfg(all(feature = "simple_neighbors", feature = "hierarchical_neighbors"))]
+                Self::check_neighbors,
+            )
+                .chain(),
         )
         // We handle input and trigger events only if the state is active
         .add_systems(OnEnter(self.not_pause.clone()), Self::init_observers)
@@ -100,6 +111,10 @@ impl<T, U> BoardPluginV2<T, U> {
             &mut coords_map,
         );
 
+        #[cfg(all(feature = "simple_neighbors", not(feature = "hierarchical_neighbors")))]
+        Self::assign_neighbors(&coords_map, &mut commands);
+
+        #[cfg(feature = "hierarchical_neighbors")]
         let virtual_centers = Self::assign_neighbors(&coords_map, &mut commands, options.map_size);
 
         let board_entity = commands
@@ -119,6 +134,7 @@ impl<T, U> BoardPluginV2<T, U> {
                         Transform::from_xyz(board_size.x / 2., board_size.y / 2., 0.),
                     )),
                     WithRelated::new(coords_map.into_values()),
+                    #[cfg(feature = "hierarchical_neighbors")]
                     WithRelated::new(virtual_centers),
                 )),
             ))
@@ -143,20 +159,31 @@ impl<T, U> BoardPluginV2<T, U> {
 
     /// Places bombs and bomb neighbor tiles
     fn set_bombs(
-        query: Query<(Entity, &Children), With<Coordinates>>,
+        #[cfg(not(feature = "simple_neighbors"))] query: Query<
+            (Entity, &Children),
+            With<Coordinates>,
+        >,
+        #[cfg(feature = "simple_neighbors")] query: Query<
+            (Entity, &Neighbors, &Children),
+            With<Coordinates>,
+        >,
         cover_query: Query<(), With<TileCover>>,
         mut commands: Commands,
         board_options: Option<Res<BoardOptions>>,
         board_assets: Res<BoardAssets>,
         board: Res<Board>,
-        query_neighbors_2: Query<(
+        #[cfg(feature = "hierarchical_neighbors")] query_neighbors_2: Query<(
             Option<&Neighbors2>,
             Option<&LevelDown>,
             &Coordinates,
             &Center,
             Has<VirtualCenter>,
         )>,
-        query_neighbor_of: Query<(Option<&NeighborOf>, Option<&LevelUp>, &Coordinates)>,
+        #[cfg(feature = "hierarchical_neighbors")] query_neighbor_of: Query<(
+            Option<&NeighborOf>,
+            Option<&LevelUp>,
+            &Coordinates,
+        )>,
     ) {
         let mut rng = rng();
         let options = match board_options {
@@ -166,12 +193,29 @@ impl<T, U> BoardPluginV2<T, U> {
         let bomb_count = options.bomb_count as usize;
         let padding = options.tile_padding;
         let size = board.tile_size;
-
+        #[cfg(feature = "simple_neighbors")]
+        let mut entities: Vec<(Entity, &Neighbors)> =
+            query.iter().map(|(e, n, _)| (e, n)).collect();
+        #[cfg(not(feature = "simple_neighbors"))]
         let mut entities: Vec<Entity> = query.iter().map(|(e, _)| e).collect();
         entities.shuffle(&mut rng);
         let mut bomb_entities = HashSet::new();
 
         for i in 0..bomb_count {
+            #[cfg(feature = "simple_neighbors")]
+            if let Some((entity, _)) = entities.get(i) {
+                commands.entity(*entity).insert(Bomb).with_child((
+                    Sprite {
+                        color: board_assets.bomb_material.color,
+                        image: board_assets.bomb_material.texture.clone(),
+                        custom_size: Some(Vec2::splat(size - padding)),
+                        ..default()
+                    },
+                    Transform::from_xyz(0., 0., 1.),
+                ));
+                bomb_entities.insert(*entity);
+            }
+            #[cfg(not(feature = "simple_neighbors"))]
             if let Some(entity) = entities.get(i) {
                 commands.entity(*entity).insert(Bomb).with_child((
                     Sprite {
@@ -188,25 +232,72 @@ impl<T, U> BoardPluginV2<T, U> {
 
         let mut safe_start = None;
 
-        for entity in entities.iter().skip(bomb_count).copied() {
-            let count = find_neighbors(entity, &query_neighbors_2, &query_neighbor_of)
-                .iter()
-                .filter(|&e| bomb_entities.contains(e))
-                .count() as u8;
+        let start = Instant::now();
 
-            if count > 0 {
-                commands
-                    .entity(entity)
-                    .insert(BombNeighbor { count })
-                    .with_child(Self::bomb_count_text_bundle(
-                        count,
-                        &board_assets,
-                        (size - padding) * 0.5,
-                    ));
-            } else if safe_start.is_none() {
-                safe_start = Some(entity);
+        #[cfg(feature = "simple_neighbors")]
+        {
+            for (entity, neighbors) in entities.iter().skip(bomb_count).copied() {
+                let count = neighbors
+                    .iter()
+                    .flatten()
+                    .filter(|&e| bomb_entities.contains(e))
+                    .count() as u8;
+
+                if count > 0 {
+                    commands
+                        .entity(entity)
+                        .insert(BombNeighbor { count })
+                        .with_child(Self::bomb_count_text_bundle(
+                            count,
+                            &board_assets,
+                            (size - padding) * 0.5,
+                        ));
+                } else if safe_start.is_none() {
+                    safe_start = Some(entity);
+                }
+            }
+
+            let elapsed = start.elapsed();
+            println!("simple_neighbors took {:?}", elapsed);
+        }
+
+        #[cfg(feature = "simple_neighbors")]
+        if options.safe_start {
+            if let Some(entity) = safe_start {
+                let (_, _, children) = query.get(entity).unwrap();
+                for &child in children {
+                    if cover_query.get(child).is_ok() {
+                        commands.entity(child).insert(Uncover);
+                    }
+                }
             }
         }
+        #[cfg(all(feature = "hierarchical_neighbors", not(feature = "simple_neighbors")))]
+        {
+            for entity in entities.iter().skip(bomb_count).copied() {
+                let count = find_neighbors(entity, &query_neighbors_2, &query_neighbor_of)
+                    .iter()
+                    .filter(|&e| bomb_entities.contains(e))
+                    .count() as u8;
+
+                if count > 0 {
+                    commands
+                        .entity(entity)
+                        .insert(BombNeighbor { count })
+                        .with_child(Self::bomb_count_text_bundle(
+                            count,
+                            &board_assets,
+                            (size - padding) * 0.5,
+                        ));
+                } else if safe_start.is_none() {
+                    safe_start = Some(entity);
+                }
+            }
+
+            let elapsed = start.elapsed();
+            println!("hierarchical_neighbors took {:?}", elapsed);
+        }
+        #[cfg(all(feature = "hierarchical_neighbors", not(feature = "simple_neighbors")))]
         if options.safe_start {
             if let Some(entity) = safe_start {
                 let (_, children) = query.get(entity).unwrap();
@@ -298,78 +389,89 @@ impl<T, U> BoardPluginV2<T, U> {
     fn assign_neighbors(
         coords_map: &HashMap<Coordinates, Entity>,
         commands: &mut Commands,
-        (width, height): (u16, u16),
+        #[cfg(feature = "hierarchical_neighbors")] (width, height): (u16, u16),
     ) -> Vec<Entity> {
-        for (&coords, &entity) in coords_map {
-            let neighbors = SQUARE_COORDINATES
-                .map(|tuple| coords + tuple)
-                .map(|c| coords_map.get(&c).copied());
-            commands.entity(entity).insert(Neighbors(neighbors));
+        #[cfg(feature = "simple_neighbors")]
+        {
+            for (&coords, &entity) in coords_map {
+                let neighbors = SQUARE_COORDINATES
+                    .map(|tuple| coords + tuple)
+                    .map(|c| coords_map.get(&c).copied());
+                commands.entity(entity).insert(Neighbors(neighbors));
+            }
         }
 
-        let mut virtual_centers = Vec::new();
+        #[cfg(feature = "hierarchical_neighbors")]
+        {
+            let mut virtual_centers = Vec::new();
 
-        let mut temp = coords_map.clone();
-        let mut divisor: u16 = 3;
+            let mut temp = coords_map.clone();
+            let mut divisor: u16 = 3;
 
-        while temp.len() > 1 {
-            let mut new_map = HashMap::new();
-            let level = divisor.ilog(3) as u8;
+            while temp.len() > 1 {
+                let mut new_map = HashMap::new();
+                let level = divisor.ilog(3) as u8;
 
-            for y in 0..height.div_ceil(divisor) {
-                for x in 0..width.div_ceil(divisor) {
-                    let center = Coordinates {
-                        x: x * divisor + divisor / 2,
-                        y: y * divisor + divisor / 2,
-                    };
+                for y in 0..height.div_ceil(divisor) {
+                    for x in 0..width.div_ceil(divisor) {
+                        let center = Coordinates {
+                            x: x * divisor + divisor / 2,
+                            y: y * divisor + divisor / 2,
+                        };
 
-                    let mut center_entity = temp.get(&center).copied().unwrap_or_else(|| {
-                        let entity = commands
-                            .spawn((
-                                Name::new(format!("Virtual Center ({}, {})", center.x, center.y)),
-                                center,
-                                VirtualCenter,
-                            ))
-                            .id();
-                        virtual_centers.push(entity);
-                        entity
-                    });
+                        let mut center_entity = temp.get(&center).copied().unwrap_or_else(|| {
+                            let entity = commands
+                                .spawn((
+                                    Name::new(format!(
+                                        "Virtual Center ({}, {})",
+                                        center.x, center.y
+                                    )),
+                                    center,
+                                    VirtualCenter,
+                                ))
+                                .id();
+                            virtual_centers.push(entity);
+                            entity
+                        });
 
-                    if level > 1 {
-                        let center_up = commands
-                            .spawn((
-                                Name::new(format!(
-                                    "Level{} Center ({}, {})",
-                                    level, center.x, center.y
-                                )),
-                                center,
-                                VirtualCenter,
-                            ))
-                            .add_one_related::<LevelUp>(center_entity)
-                            .id();
-                        virtual_centers.push(center_up);
-                        center_entity = center_up;
-                    }
+                        if level > 1 {
+                            let center_up = commands
+                                .spawn((
+                                    Name::new(format!(
+                                        "Level{} Center ({}, {})",
+                                        level, center.x, center.y
+                                    )),
+                                    center,
+                                    VirtualCenter,
+                                ))
+                                .add_one_related::<LevelUp>(center_entity)
+                                .id();
+                            virtual_centers.push(center_up);
+                            center_entity = center_up;
+                        }
 
-                    commands.entity(center_entity).insert(Center(level));
+                        commands.entity(center_entity).insert(Center(level));
 
-                    new_map.insert(center, center_entity);
-                    let neighbors =
-                        SQUARE_COORDINATES.map(|tuple| center + tuple * divisor as i32 / 3);
+                        new_map.insert(center, center_entity);
+                        let neighbors =
+                            SQUARE_COORDINATES.map(|tuple| center + tuple * divisor as i32 / 3);
 
-                    for coords in neighbors {
-                        if let Some(&entity) = temp.get(&coords) {
-                            commands.entity(entity).insert(NeighborOf(center_entity));
+                        for coords in neighbors {
+                            if let Some(&entity) = temp.get(&coords) {
+                                commands.entity(entity).insert(NeighborOf(center_entity));
+                            }
                         }
                     }
                 }
+
+                temp = new_map;
+                divisor *= 3;
             }
 
-            temp = new_map;
-            divisor *= 3;
+            return virtual_centers;
         }
 
-        virtual_centers
+        Vec::new()
     }
 
     fn cleanup_board(
@@ -407,6 +509,7 @@ impl<T, U> BoardPluginV2<T, U> {
         commands.remove_resource::<BoardObservers>();
     }
 
+    #[cfg(all(feature = "simple_neighbors", feature = "hierarchical_neighbors"))]
     fn check_neighbors(
         query_neighbors: Query<(Entity, &Neighbors)>,
         query_neighbors_2: Query<(
@@ -445,7 +548,7 @@ impl<T, U> BoardPluginV2<T, U> {
         }
     }
 }
-
+#[cfg(feature = "hierarchical_neighbors")]
 pub fn find_neighbors(
     entity: Entity,
     query_neighbors: &Query<(
@@ -484,7 +587,7 @@ pub fn find_neighbors(
 
     vec![]
 }
-
+#[cfg(feature = "hierarchical_neighbors")]
 fn find_coordinate(
     coords: Coordinates,
     center_entity: Entity,

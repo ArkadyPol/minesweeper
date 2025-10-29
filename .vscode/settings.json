@@ -1,6 +1,7 @@
 {
     "rust-analyzer.cargo.features": [
-        "debug"
+        "debug",
+        "hierarchical_neighbors",
     ],
     "rust-analyzer.cargo.targetDir": true,
 }

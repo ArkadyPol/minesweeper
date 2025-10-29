@@ -1,6 +1,6 @@
 (
-    map_size: (20, 20),
-    bomb_count: 40,
+    map_size: (160, 160),
+    bomb_count: 1000,
     position: Centered(
         offset: (0.0, 0.0, 0.0),
     ),

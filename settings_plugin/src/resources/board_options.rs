@@ -86,7 +86,7 @@ impl BoardOptions {
             return Err("Width too small!".into());
         }
 
-        if area > 10000 {
+        if area > 25600 {
             return Err("Width too large!".into());
         }
 
@@ -105,7 +105,7 @@ impl BoardOptions {
             return Err("Height too small!".into());
         }
 
-        if area > 10000 {
+        if area > 25600 {
             return Err("Height too large!".into());
         }
 

@@ -14,6 +14,8 @@ debug = [
     "settings_plugin/debug", 
     "bevy-inspector-egui"
 ]
+simple_neighbors = ["board_plugin_v2/simple_neighbors"]
+hierarchical_neighbors = ["board_plugin_v2/hierarchical_neighbors"]
 
 [dependencies]
 bevy = { version = "0.17.2", features = ["dynamic_linking", "experimental_bevy_ui_widgets"] }

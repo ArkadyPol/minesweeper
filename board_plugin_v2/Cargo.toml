@@ -6,6 +6,8 @@ edition = "2024"
 [features]
 default = []
 debug = ["colored", "bevy-inspector-egui"]
+simple_neighbors = []
+hierarchical_neighbors = []
 
 [dependencies]
 settings_plugin = { path = "../settings_plugin"}
