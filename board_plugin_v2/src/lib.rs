@@ -31,7 +31,7 @@ use systems::{
 use components::Neighbors;
 
 #[cfg(feature = "hierarchical_neighbors")]
-use components::{Center, LevelDown, LevelUp, NeighborOf, Neighbors2, VirtualCenter};
+use components::{Center, GridChildOf, GridChildren};
 
 pub struct BoardPluginV2<T, U> {
     pub running_state: T,
@@ -115,7 +115,7 @@ impl<T, U> BoardPluginV2<T, U> {
         Self::assign_neighbors(&coords_map, &mut commands);
 
         #[cfg(feature = "hierarchical_neighbors")]
-        let virtual_centers = Self::assign_neighbors(&coords_map, &mut commands, options.map_size);
+        let centers = Self::assign_neighbors(&coords_map, &mut commands, options.map_size);
 
         let board_entity = commands
             .spawn((
@@ -135,7 +135,7 @@ impl<T, U> BoardPluginV2<T, U> {
                     )),
                     WithRelated::new(coords_map.into_values()),
                     #[cfg(feature = "hierarchical_neighbors")]
-                    WithRelated::new(virtual_centers),
+                    WithRelated::new(centers),
                 )),
             ))
             .id();
@@ -173,15 +173,12 @@ impl<T, U> BoardPluginV2<T, U> {
         board_assets: Res<BoardAssets>,
         board: Res<Board>,
         #[cfg(feature = "hierarchical_neighbors")] query_neighbors_2: Query<(
-            Option<&Neighbors2>,
-            Option<&LevelDown>,
+            &GridChildren,
             &Coordinates,
             &Center,
-            Has<VirtualCenter>,
         )>,
         #[cfg(feature = "hierarchical_neighbors")] query_neighbor_of: Query<(
-            Option<&NeighborOf>,
-            Option<&LevelUp>,
+            &GridChildOf,
             &Coordinates,
         )>,
     ) {
@@ -403,8 +400,7 @@ impl<T, U> BoardPluginV2<T, U> {
 
         #[cfg(feature = "hierarchical_neighbors")]
         {
-            let mut virtual_centers = Vec::new();
-
+            let mut centers = Vec::new();
             let mut temp = coords_map.clone();
             let mut divisor: u16 = 3;
 
@@ -414,51 +410,32 @@ impl<T, U> BoardPluginV2<T, U> {
 
                 for y in 0..height.div_ceil(divisor) {
                     for x in 0..width.div_ceil(divisor) {
-                        let center = Coordinates {
+                        let center_coords = Coordinates {
                             x: x * divisor + divisor / 2,
                             y: y * divisor + divisor / 2,
                         };
 
-                        let mut center_entity = temp.get(&center).copied().unwrap_or_else(|| {
-                            let entity = commands
-                                .spawn((
-                                    Name::new(format!(
-                                        "Virtual Center ({}, {})",
-                                        center.x, center.y
-                                    )),
-                                    center,
-                                    VirtualCenter,
-                                ))
-                                .id();
-                            virtual_centers.push(entity);
-                            entity
-                        });
+                        let center_entity = commands
+                            .spawn((
+                                Name::new(format!("Level{} Center {}", level, center_coords)),
+                                Center(level),
+                                center_coords,
+                            ))
+                            .id();
 
-                        if level > 1 {
-                            let center_up = commands
-                                .spawn((
-                                    Name::new(format!(
-                                        "Level{} Center ({}, {})",
-                                        level, center.x, center.y
-                                    )),
-                                    center,
-                                    VirtualCenter,
-                                ))
-                                .add_one_related::<LevelUp>(center_entity)
-                                .id();
-                            virtual_centers.push(center_up);
-                            center_entity = center_up;
+                        centers.push(center_entity);
+                        new_map.insert(center_coords, center_entity);
+
+                        if let Some(&entity) = temp.get(&center_coords) {
+                            commands.entity(entity).insert(GridChildOf(center_entity));
                         }
 
-                        commands.entity(center_entity).insert(Center(level));
-
-                        new_map.insert(center, center_entity);
-                        let neighbors =
-                            SQUARE_COORDINATES.map(|tuple| center + tuple * divisor as i32 / 3);
+                        let neighbors = SQUARE_COORDINATES
+                            .map(|tuple| center_coords + tuple * divisor as i32 / 3);
 
                         for coords in neighbors {
                             if let Some(&entity) = temp.get(&coords) {
-                                commands.entity(entity).insert(NeighborOf(center_entity));
+                                commands.entity(entity).insert(GridChildOf(center_entity));
                             }
                         }
                     }
@@ -468,7 +445,7 @@ impl<T, U> BoardPluginV2<T, U> {
                 divisor *= 3;
             }
 
-            return virtual_centers;
+            return centers;
         }
 
         Vec::new()
@@ -512,14 +489,8 @@ impl<T, U> BoardPluginV2<T, U> {
     #[cfg(all(feature = "simple_neighbors", feature = "hierarchical_neighbors"))]
     fn check_neighbors(
         query_neighbors: Query<(Entity, &Neighbors)>,
-        query_neighbors_2: Query<(
-            Option<&Neighbors2>,
-            Option<&LevelDown>,
-            &Coordinates,
-            &Center,
-            Has<VirtualCenter>,
-        )>,
-        query_neighbor_of: Query<(Option<&NeighborOf>, Option<&LevelUp>, &Coordinates)>,
+        query_neighbors_2: Query<(&GridChildren, &Coordinates, &Center)>,
+        query_neighbor_of: Query<(&GridChildOf, &Coordinates)>,
         query_coordinates: Query<&Coordinates>,
     ) {
         for (entity, neighbors) in query_neighbors {
@@ -554,21 +525,15 @@ impl<T, U> BoardPluginV2<T, U> {
 #[cfg(feature = "hierarchical_neighbors")]
 pub fn find_neighbors(
     entity: Entity,
-    query_neighbors: &Query<(
-        Option<&Neighbors2>,
-        Option<&LevelDown>,
-        &Coordinates,
-        &Center,
-        Has<VirtualCenter>,
-    )>,
-    query_neighbor_of: &Query<(Option<&NeighborOf>, Option<&LevelUp>, &Coordinates)>,
+    query_neighbors: &Query<(&GridChildren, &Coordinates, &Center)>,
+    query_neighbor_of: &Query<(&GridChildOf, &Coordinates)>,
 ) -> Vec<Entity> {
-    if let Ok((Some(neighbors), ..)) = query_neighbors.get(entity) {
-        return neighbors.iter().collect();
+    if let Ok((children, _, _)) = query_neighbors.get(entity) {
+        return children.iter().filter(|e| *e != entity).collect();
     }
 
-    if let Ok((Some(neighbor_of), _, &coords)) = query_neighbor_of.get(entity) {
-        let center_entity = neighbor_of.0;
+    if let Ok((child_of, &coords)) = query_neighbor_of.get(entity) {
+        let center_entity = child_of.0;
         let area = IRect::from_center_size(coords.into(), IVec2::splat(3));
 
         let mut visited = HashSet::new();
@@ -589,77 +554,6 @@ pub fn find_neighbors(
 
     vec![]
 }
-#[cfg(feature = "hierarchical_neighbors")]
-fn find_coordinate(
-    coords: Coordinates,
-    center_entity: Entity,
-    source_entity: Entity,
-    query_neighbors: &Query<(
-        Option<&Neighbors2>,
-        Option<&LevelDown>,
-        &Coordinates,
-        &Center,
-        Has<VirtualCenter>,
-    )>,
-    query_neighbor_of: &Query<(Option<&NeighborOf>, Option<&LevelUp>, &Coordinates)>,
-) -> Option<Entity> {
-    let Ok((Some(neighbors), level_down, &center_coords, level, is_virtual)) =
-        query_neighbors.get(center_entity)
-    else {
-        return None;
-    };
-
-    if **level == 1 {
-        if !is_virtual && coords == center_coords {
-            return Some(center_entity);
-        }
-
-        for neighbor_entity in neighbors.iter() {
-            if let Ok((_, _, &n_coords)) = query_neighbor_of.get(neighbor_entity) {
-                if coords == n_coords {
-                    return Some(neighbor_entity);
-                }
-            }
-        }
-    }
-
-    let child_iter = neighbors
-        .iter()
-        .chain(level_down.into_iter().map(|l| l.entity()));
-
-    for child_entity in child_iter {
-        if child_entity == source_entity {
-            continue;
-        }
-
-        if let Ok((_, _, &n_coords, level, _)) = query_neighbors.get(child_entity) {
-            let bounds = IRect::from_center_size(n_coords.into(), level.get_size());
-            if bounds.contains(coords.into()) {
-                return find_coordinate(
-                    coords,
-                    child_entity,
-                    source_entity,
-                    query_neighbors,
-                    query_neighbor_of,
-                );
-            }
-        }
-    }
-
-    if let Ok((neighbor_of, level_up, _)) = query_neighbor_of.get(center_entity) {
-        if let Some(parent_entity) = neighbor_of.map(|n| n.0).or_else(|| level_up.map(|l| l.0)) {
-            return find_coordinate(
-                coords,
-                parent_entity,
-                center_entity,
-                query_neighbors,
-                query_neighbor_of,
-            );
-        };
-    }
-
-    None
-}
 
 #[cfg(feature = "hierarchical_neighbors")]
 fn find_intersecting(
@@ -668,48 +562,32 @@ fn find_intersecting(
     source_entity: Entity,
     visited: &mut HashSet<Entity>,
     found: &mut Vec<Entity>,
-    query_neighbors: &Query<(
-        Option<&Neighbors2>,
-        Option<&LevelDown>,
-        &Coordinates,
-        &Center,
-        Has<VirtualCenter>,
-    )>,
-    query_neighbor_of: &Query<(Option<&NeighborOf>, Option<&LevelUp>, &Coordinates)>,
+    query_neighbors: &Query<(&GridChildren, &Coordinates, &Center)>,
+    query_neighbor_of: &Query<(&GridChildOf, &Coordinates)>,
 ) {
     if !visited.insert(center_entity) {
         return;
     }
-    let Ok((Some(neighbors), level_down, &center_coords, level, is_virtual)) =
-        query_neighbors.get(center_entity)
-    else {
+    let Ok((children, _, level)) = query_neighbors.get(center_entity) else {
         return;
     };
 
     if **level == 1 {
-        if !is_virtual && area.contains(center_coords.into()) {
-            found.push(center_entity);
-        }
-
-        for neighbor_entity in neighbors.iter() {
-            if neighbor_entity == source_entity {
+        for child_entity in children.iter() {
+            if child_entity == source_entity {
                 continue;
             }
 
-            if let Ok((_, _, &n_coords)) = query_neighbor_of.get(neighbor_entity) {
+            if let Ok((_, &n_coords)) = query_neighbor_of.get(child_entity) {
                 if area.contains(n_coords.into()) {
-                    found.push(neighbor_entity);
+                    found.push(child_entity);
                 }
             }
         }
     }
 
-    let child_iter = neighbors
-        .iter()
-        .chain(level_down.into_iter().map(|l| l.entity()));
-
-    for child_entity in child_iter {
-        if let Ok((_, _, &n_coords, level, _)) = query_neighbors.get(child_entity) {
+    for child_entity in children.iter() {
+        if let Ok((_, &n_coords, level)) = query_neighbors.get(child_entity) {
             let bounds = IRect::from_center_size(n_coords.into(), level.get_size());
 
             if intersects(bounds, area) {
@@ -726,20 +604,18 @@ fn find_intersecting(
         }
     }
 
-    if found.len() < 8
-        && let Ok((neighbor_of, level_up, _)) = query_neighbor_of.get(center_entity)
-    {
-        if let Some(parent_entity) = neighbor_of.map(|n| n.0).or_else(|| level_up.map(|l| l.0)) {
+    if found.len() < 8 {
+        if let Ok((child_of, _)) = query_neighbor_of.get(center_entity) {
             find_intersecting(
                 area,
-                parent_entity,
+                child_of.0,
                 source_entity,
                 visited,
                 found,
                 query_neighbors,
                 query_neighbor_of,
             );
-        };
+        }
     }
 }
 
