@@ -586,7 +586,28 @@ fn find_intersecting(
         }
     }
 
-    if **level > 1 {
+    if **level == 2 {
+        for child_entity in children.iter() {
+            if visited.contains(&child_entity) {
+                continue;
+            }
+            if let Ok((children, &n_coords, level)) = query_neighbors.get(child_entity) {
+                let bounds = IRect::from_center_size(n_coords.into(), level.get_size());
+
+                if intersects(bounds, area) {
+                    for child_entity in children.iter() {
+                        if let Ok((_, &n_coords)) = query_neighbor_of.get(child_entity) {
+                            if area.contains(n_coords.into()) {
+                                found.push(child_entity);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if **level > 2 {
         for child_entity in children.iter() {
             if let Ok((_, &n_coords, level)) = query_neighbors.get(child_entity) {
                 let bounds = IRect::from_center_size(n_coords.into(), level.get_size());
