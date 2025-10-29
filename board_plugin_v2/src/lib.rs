@@ -523,25 +523,28 @@ impl<T, U> BoardPluginV2<T, U> {
         query_coordinates: Query<&Coordinates>,
     ) {
         for (entity, neighbors) in query_neighbors {
-            let neighbors: Vec<Entity> = neighbors.iter().flatten().copied().collect();
-            let neighbors_2 = find_neighbors(entity, &query_neighbors_2, &query_neighbor_of);
+            let neighbors: HashSet<Entity> = neighbors.iter().flatten().copied().collect();
+            let neighbors_2: HashSet<Entity> =
+                find_neighbors(entity, &query_neighbors_2, &query_neighbor_of)
+                    .into_iter()
+                    .collect();
 
             if neighbors != neighbors_2 {
                 if let Ok(coords) = query_coordinates.get(entity) {
                     println!("--{}--", coords);
                 }
-                for i in 0..neighbors.len().max(neighbors_2.len()) {
-                    let n_coords = neighbors
-                        .get(i)
-                        .and_then(|&e| query_coordinates.get(e).ok());
-                    let n_coords_2 = neighbors_2
-                        .get(i)
-                        .and_then(|&e| query_coordinates.get(e).ok());
-                    match (n_coords, n_coords_2) {
-                        (Some(c1), Some(c2)) => println!("{} / {}", c1, c2),
-                        (Some(c1), None) => println!("{} / None", c1),
-                        (None, Some(c2)) => println!("None / {}", c2),
-                        (None, None) => println!("None / None"),
+                let all_neighbors: HashSet<Entity> =
+                    neighbors.union(&neighbors_2).copied().collect();
+
+                for n in all_neighbors {
+                    let coords = query_coordinates.get(n).ok();
+                    let in_first = neighbors.contains(&n);
+                    let in_second = neighbors_2.contains(&n);
+                    match (coords, in_first, in_second) {
+                        (Some(coords), true, true) => println!("{} / {}", coords, coords),
+                        (Some(coords), true, false) => println!("{} / None", coords),
+                        (Some(coords), false, true) => println!("None / {}", coords),
+                        _ => println!("None / None"),
                     }
                 }
             }
@@ -564,25 +567,24 @@ pub fn find_neighbors(
         return neighbors.iter().collect();
     }
 
-    if let Ok((Some(neighbor_of), _, coords)) = query_neighbor_of.get(entity) {
-        let mut entities = Vec::new();
-        let neighbors = SQUARE_COORDINATES.map(|tuple| *coords + tuple);
-
+    if let Ok((Some(neighbor_of), _, &coords)) = query_neighbor_of.get(entity) {
         let center_entity = neighbor_of.0;
+        let area = IRect::from_center_size(coords.into(), IVec2::splat(3));
 
-        for neighbor in neighbors {
-            if let Some(neighbor_entity) = find_coordinate(
-                neighbor,
-                center_entity,
-                entity,
-                query_neighbors,
-                query_neighbor_of,
-            ) {
-                entities.push(neighbor_entity);
-            }
-        }
+        let mut visited = HashSet::new();
+        let mut found = Vec::new();
 
-        return entities;
+        find_intersecting(
+            area,
+            center_entity,
+            entity,
+            &mut visited,
+            &mut found,
+            query_neighbors,
+            query_neighbor_of,
+        );
+
+        return found;
     }
 
     vec![]
@@ -659,6 +661,91 @@ fn find_coordinate(
     None
 }
 
+#[cfg(feature = "hierarchical_neighbors")]
+fn find_intersecting(
+    area: IRect,
+    center_entity: Entity,
+    source_entity: Entity,
+    visited: &mut HashSet<Entity>,
+    found: &mut Vec<Entity>,
+    query_neighbors: &Query<(
+        Option<&Neighbors2>,
+        Option<&LevelDown>,
+        &Coordinates,
+        &Center,
+        Has<VirtualCenter>,
+    )>,
+    query_neighbor_of: &Query<(Option<&NeighborOf>, Option<&LevelUp>, &Coordinates)>,
+) {
+    if !visited.insert(center_entity) {
+        return;
+    }
+    let Ok((Some(neighbors), level_down, &center_coords, level, is_virtual)) =
+        query_neighbors.get(center_entity)
+    else {
+        return;
+    };
+
+    if **level == 1 {
+        if !is_virtual && area.contains(center_coords.into()) {
+            found.push(center_entity);
+        }
+
+        let bounds = IRect::from_center_size(center_coords.into(), level.get_size());
+        let intersection = bounds.intersect(area);
+
+        for neighbor_entity in neighbors.iter() {
+            if neighbor_entity == source_entity {
+                continue;
+            }
+
+            if let Ok((_, _, &n_coords)) = query_neighbor_of.get(neighbor_entity) {
+                if intersection.contains(n_coords.into()) {
+                    found.push(neighbor_entity);
+                }
+            }
+        }
+    }
+
+    let child_iter = neighbors
+        .iter()
+        .chain(level_down.into_iter().map(|l| l.entity()));
+
+    for child_entity in child_iter {
+        if let Ok((_, _, &n_coords, level, _)) = query_neighbors.get(child_entity) {
+            let bounds = IRect::from_center_size(n_coords.into(), level.get_size());
+
+            if intersects(bounds, area) {
+                find_intersecting(
+                    area,
+                    child_entity,
+                    source_entity,
+                    visited,
+                    found,
+                    query_neighbors,
+                    query_neighbor_of,
+                );
+            }
+        }
+    }
+
+    if found.len() < 8
+        && let Ok((neighbor_of, level_up, _)) = query_neighbor_of.get(center_entity)
+    {
+        if let Some(parent_entity) = neighbor_of.map(|n| n.0).or_else(|| level_up.map(|l| l.0)) {
+            find_intersecting(
+                area,
+                parent_entity,
+                source_entity,
+                visited,
+                found,
+                query_neighbors,
+                query_neighbor_of,
+            );
+        };
+    }
+}
+
 /// Delta coordinates for all 8 square neighbors
 const SQUARE_COORDINATES: [IVec2; 8] = [
     // Bottom left
@@ -678,3 +765,7 @@ const SQUARE_COORDINATES: [IVec2; 8] = [
     // Top right
     IVec2::new(1, 1),
 ];
+
+fn intersects(a: IRect, b: IRect) -> bool {
+    !(a.max.x < b.min.x || b.max.x < a.min.x || a.max.y < b.min.y || b.max.y < a.min.y)
+}
