@@ -31,7 +31,7 @@ use systems::{
 use components::Neighbors;
 
 #[cfg(feature = "hierarchical_neighbors")]
-use components::{Center, GridChildOf, GridChildren};
+use components::{Center, GridChildOf, GridMap};
 
 pub struct BoardPluginV2<T, U> {
     pub running_state: T,
@@ -172,11 +172,7 @@ impl<T, U> BoardPluginV2<T, U> {
         board_options: Option<Res<BoardOptions>>,
         board_assets: Res<BoardAssets>,
         board: Res<Board>,
-        #[cfg(feature = "hierarchical_neighbors")] query_neighbors_2: Query<(
-            &GridChildren,
-            &Coordinates,
-            &Center,
-        )>,
+        #[cfg(feature = "hierarchical_neighbors")] query_neighbors_2: Query<(&Center, &GridMap)>,
         #[cfg(feature = "hierarchical_neighbors")] query_neighbor_of: Query<(
             &GridChildOf,
             &Coordinates,
@@ -426,8 +422,11 @@ impl<T, U> BoardPluginV2<T, U> {
                         centers.push(center_entity);
                         new_map.insert(center_coords, center_entity);
 
+                        let mut grid_map = Vec::new();
+
                         if let Some(&entity) = temp.get(&center_coords) {
                             commands.entity(entity).insert(GridChildOf(center_entity));
+                            grid_map.push((entity, center_coords));
                         }
 
                         let neighbors = SQUARE_COORDINATES
@@ -436,8 +435,11 @@ impl<T, U> BoardPluginV2<T, U> {
                         for coords in neighbors {
                             if let Some(&entity) = temp.get(&coords) {
                                 commands.entity(entity).insert(GridChildOf(center_entity));
+                                grid_map.push((entity, coords));
                             }
                         }
+
+                        commands.entity(center_entity).insert(GridMap(grid_map));
                     }
                 }
 
@@ -489,7 +491,7 @@ impl<T, U> BoardPluginV2<T, U> {
     #[cfg(all(feature = "simple_neighbors", feature = "hierarchical_neighbors"))]
     fn check_neighbors(
         query_neighbors: Query<(Entity, &Neighbors)>,
-        query_neighbors_2: Query<(&GridChildren, &Coordinates, &Center)>,
+        query_neighbors_2: Query<(&Center, &GridMap)>,
         query_neighbor_of: Query<(&GridChildOf, &Coordinates)>,
         query_coordinates: Query<&Coordinates>,
     ) {
@@ -525,11 +527,14 @@ impl<T, U> BoardPluginV2<T, U> {
 #[cfg(feature = "hierarchical_neighbors")]
 pub fn find_neighbors(
     entity: Entity,
-    query_neighbors: &Query<(&GridChildren, &Coordinates, &Center)>,
+    query_neighbors: &Query<(&Center, &GridMap)>,
     query_neighbor_of: &Query<(&GridChildOf, &Coordinates)>,
 ) -> Vec<Entity> {
-    if let Ok((children, _, _)) = query_neighbors.get(entity) {
-        return children.iter().filter(|e| *e != entity).collect();
+    if let Ok((_, grid_map)) = query_neighbors.get(entity) {
+        return grid_map
+            .iter()
+            .filter_map(|&(e, _)| (e != entity).then_some(e))
+            .collect();
     }
 
     if let Ok((child_of, &coords)) = query_neighbor_of.get(entity) {
@@ -562,44 +567,40 @@ fn find_intersecting(
     source_entity: Entity,
     visited: &mut HashSet<Entity>,
     found: &mut Vec<Entity>,
-    query_neighbors: &Query<(&GridChildren, &Coordinates, &Center)>,
+    query_neighbors: &Query<(&Center, &GridMap)>,
     query_neighbor_of: &Query<(&GridChildOf, &Coordinates)>,
 ) {
     if !visited.insert(center_entity) {
         return;
     }
-    let Ok((children, _, level)) = query_neighbors.get(center_entity) else {
+    let Ok((level, grid_map)) = query_neighbors.get(center_entity) else {
         return;
     };
 
     if **level == 1 {
-        for child_entity in children.iter() {
+        for (child_entity, coords) in grid_map.iter().copied() {
             if child_entity == source_entity {
                 continue;
             }
 
-            if let Ok((_, &n_coords)) = query_neighbor_of.get(child_entity) {
-                if area.contains(n_coords.into()) {
-                    found.push(child_entity);
-                }
+            if area.contains(coords.into()) {
+                found.push(child_entity);
             }
         }
     }
 
     if **level == 2 {
-        for child_entity in children.iter() {
+        for (child_entity, coords) in grid_map.iter().copied() {
             if visited.contains(&child_entity) {
                 continue;
             }
-            if let Ok((children, &n_coords, level)) = query_neighbors.get(child_entity) {
-                let bounds = IRect::from_center_size(n_coords.into(), level.get_size());
+            if let Ok((level, grid_map)) = query_neighbors.get(child_entity) {
+                let bounds = IRect::from_center_size(coords.into(), level.get_size());
 
                 if intersects(bounds, area) {
-                    for child_entity in children.iter() {
-                        if let Ok((_, &n_coords)) = query_neighbor_of.get(child_entity) {
-                            if area.contains(n_coords.into()) {
-                                found.push(child_entity);
-                            }
+                    for (child_entity, coords) in grid_map.iter().copied() {
+                        if area.contains(coords.into()) {
+                            found.push(child_entity);
                         }
                     }
                 }
@@ -608,9 +609,9 @@ fn find_intersecting(
     }
 
     if **level > 2 {
-        for child_entity in children.iter() {
-            if let Ok((_, &n_coords, level)) = query_neighbors.get(child_entity) {
-                let bounds = IRect::from_center_size(n_coords.into(), level.get_size());
+        for (child_entity, coords) in grid_map.iter().copied() {
+            if let Ok((level, _)) = query_neighbors.get(child_entity) {
+                let bounds = IRect::from_center_size(coords.into(), level.get_size());
 
                 if intersects(bounds, area) {
                     find_intersecting(

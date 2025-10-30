@@ -5,6 +5,8 @@ use bevy::prelude::ReflectComponent;
 #[cfg(feature = "debug")]
 use bevy_inspector_egui::prelude::ReflectInspectorOptions;
 
+use crate::components::Coordinates;
+
 #[cfg_attr(
     feature = "debug",
     derive(bevy_inspector_egui::InspectorOptions, bevy::reflect::Reflect),
@@ -36,3 +38,11 @@ impl Center {
         IVec2::splat(3_i32.pow(**self as u32))
     }
 }
+
+#[cfg_attr(
+    feature = "debug",
+    derive(bevy_inspector_egui::InspectorOptions, bevy::reflect::Reflect),
+    reflect(Component, InspectorOptions)
+)]
+#[derive(Component, Deref)]
+pub struct GridMap(pub Vec<(Entity, Coordinates)>);
