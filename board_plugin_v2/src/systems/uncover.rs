@@ -1,9 +1,11 @@
 use bevy::{log, prelude::*};
 
+#[cfg(not(feature = "simple_neighbors"))]
+use crate::components::Coordinates;
 #[cfg(feature = "simple_neighbors")]
 use crate::components::Neighbors;
 #[cfg(feature = "hierarchical_neighbors")]
-use crate::components::{Center, Coordinates, GridChildOf, GridMap};
+use crate::components::{Center, GridChildOf, GridMap};
 #[cfg(all(feature = "hierarchical_neighbors", not(feature = "simple_neighbors")))]
 use crate::find_neighbors;
 use crate::{
@@ -11,6 +13,8 @@ use crate::{
     components::{Bomb, BombNeighbor, TileCover, Uncover},
     events::{BoardCompletedEvent, BombExplosionEvent, PropagateUncoverEvent, TileTriggerEvent},
 };
+#[cfg(not(any(feature = "simple_neighbors", feature = "hierarchical_neighbors")))]
+use crate::{SQUARE_COORDINATES, resources::Board};
 
 pub fn trigger_event_handler(event: On<TileTriggerEvent>, mut commands: Commands) {
     commands.entity(event.0).insert(Uncover);
@@ -20,9 +24,13 @@ pub fn uncover_tiles(
     mut commands: Commands,
     children: Query<(Entity, &ChildOf), With<Uncover>>,
     children_query: Query<&Children>,
+    #[cfg(not(any(feature = "simple_neighbors", feature = "hierarchical_neighbors")))] board: Res<
+        Board,
+    >,
     #[cfg(not(feature = "simple_neighbors"))] parents: Query<(
         Option<&Bomb>,
         Option<&BombNeighbor>,
+        &Coordinates,
     )>,
     #[cfg(feature = "simple_neighbors")] parents: Query<(
         &Neighbors,
@@ -32,10 +40,7 @@ pub fn uncover_tiles(
     cover_query: Query<(), (With<TileCover>, Without<Uncover>)>,
     board_options: Option<Res<BoardOptions>>,
     #[cfg(feature = "hierarchical_neighbors")] query_neighbors_2: Query<(&Center, &GridMap)>,
-    #[cfg(feature = "hierarchical_neighbors")] query_neighbor_of: Query<(
-        &GridChildOf,
-        &Coordinates,
-    )>,
+    #[cfg(feature = "hierarchical_neighbors")] query_neighbor_of: Query<&GridChildOf>,
 ) {
     let options = match board_options {
         None => BoardOptions::default(), // If no options is set we use the default one
@@ -62,7 +67,7 @@ pub fn uncover_tiles(
         };
 
         #[cfg(not(feature = "simple_neighbors"))]
-        let (bomb, bomb_counter) = match parents.get(parent_entity) {
+        let (bomb, bomb_counter, &coords) = match parents.get(parent_entity) {
             Ok(v) => v,
             Err(e) => {
                 log::error!("{}", e);
@@ -83,6 +88,14 @@ pub fn uncover_tiles(
         }
         // If the tile is empty..
         if bomb_counter.is_none() {
+            #[cfg(not(any(feature = "simple_neighbors", feature = "hierarchical_neighbors")))]
+            for neighbor_entity in SQUARE_COORDINATES
+                .map(|tuple| coords + tuple)
+                .into_iter()
+                .filter_map(|c| board.coords_map.get(&c).copied())
+            {
+                commands.trigger(PropagateUncoverEvent::new(neighbor_entity, &children_query));
+            }
             #[cfg(feature = "simple_neighbors")]
             for neighbor_entity in neighbors.iter().flatten() {
                 commands.trigger(PropagateUncoverEvent::new(
@@ -91,9 +104,12 @@ pub fn uncover_tiles(
                 ));
             }
             #[cfg(all(feature = "hierarchical_neighbors", not(feature = "simple_neighbors")))]
-            for neighbor_entity in
-                find_neighbors(parent_entity, &query_neighbors_2, &query_neighbor_of)
-            {
+            for neighbor_entity in find_neighbors(
+                parent_entity,
+                coords,
+                &query_neighbors_2,
+                &query_neighbor_of,
+            ) {
                 commands.trigger(PropagateUncoverEvent::new(neighbor_entity, &children_query));
             }
         }

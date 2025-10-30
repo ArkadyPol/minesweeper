@@ -133,7 +133,7 @@ impl<T, U> BoardPluginV2<T, U> {
                         },
                         Transform::from_xyz(board_size.x / 2., board_size.y / 2., 0.),
                     )),
-                    WithRelated::new(coords_map.into_values()),
+                    WithRelated::new(coords_map.clone().into_values()),
                     #[cfg(feature = "hierarchical_neighbors")]
                     WithRelated::new(centers),
                 )),
@@ -154,15 +154,14 @@ impl<T, U> BoardPluginV2<T, U> {
             observers,
             timer: None,
             end_message: "".into(),
+            #[cfg(not(any(feature = "simple_neighbors", feature = "hierarchical_neighbors")))]
+            coords_map,
         });
     }
 
     /// Places bombs and bomb neighbor tiles
     fn set_bombs(
-        #[cfg(not(feature = "simple_neighbors"))] query: Query<
-            (Entity, &Children),
-            With<Coordinates>,
-        >,
+        #[cfg(not(feature = "simple_neighbors"))] query: Query<(Entity, &Coordinates, &Children)>,
         #[cfg(feature = "simple_neighbors")] query: Query<
             (Entity, &Neighbors, &Children),
             With<Coordinates>,
@@ -173,10 +172,7 @@ impl<T, U> BoardPluginV2<T, U> {
         board_assets: Res<BoardAssets>,
         board: Res<Board>,
         #[cfg(feature = "hierarchical_neighbors")] query_neighbors_2: Query<(&Center, &GridMap)>,
-        #[cfg(feature = "hierarchical_neighbors")] query_neighbor_of: Query<(
-            &GridChildOf,
-            &Coordinates,
-        )>,
+        #[cfg(feature = "hierarchical_neighbors")] query_neighbor_of: Query<&GridChildOf>,
     ) {
         let mut rng = rng();
         let options = match board_options {
@@ -190,7 +186,8 @@ impl<T, U> BoardPluginV2<T, U> {
         let mut entities: Vec<(Entity, &Neighbors)> =
             query.iter().map(|(e, n, _)| (e, n)).collect();
         #[cfg(not(feature = "simple_neighbors"))]
-        let mut entities: Vec<Entity> = query.iter().map(|(e, _)| e).collect();
+        let mut entities: Vec<(Entity, Coordinates)> =
+            query.iter().map(|(e, c, _)| (e, *c)).collect();
         entities.shuffle(&mut rng);
         let mut bomb_entities = HashSet::new();
 
@@ -209,7 +206,7 @@ impl<T, U> BoardPluginV2<T, U> {
                 bomb_entities.insert(*entity);
             }
             #[cfg(not(feature = "simple_neighbors"))]
-            if let Some(entity) = entities.get(i) {
+            if let Some((entity, _)) = entities.get(i) {
                 commands.entity(*entity).insert(Bomb).with_child((
                     Sprite {
                         color: board_assets.bomb_material.color,
@@ -226,6 +223,34 @@ impl<T, U> BoardPluginV2<T, U> {
         let mut safe_start = None;
 
         let start = Instant::now();
+
+        #[cfg(not(any(feature = "simple_neighbors", feature = "hierarchical_neighbors")))]
+        {
+            for (entity, coords) in entities.iter().skip(bomb_count).copied() {
+                let count = SQUARE_COORDINATES
+                    .map(|tuple| coords + tuple)
+                    .into_iter()
+                    .filter_map(|c| board.coords_map.get(&c).copied())
+                    .filter(|e| bomb_entities.contains(e))
+                    .count() as u8;
+
+                if count > 0 {
+                    commands
+                        .entity(entity)
+                        .insert(BombNeighbor { count })
+                        .with_child(Self::bomb_count_text_bundle(
+                            count,
+                            &board_assets,
+                            (size - padding) * 0.5,
+                        ));
+                } else if safe_start.is_none() {
+                    safe_start = Some(entity);
+                }
+            }
+
+            let elapsed = start.elapsed();
+            println!("hash_neighbors took {:?}", elapsed);
+        }
 
         #[cfg(feature = "simple_neighbors")]
         {
@@ -267,8 +292,8 @@ impl<T, U> BoardPluginV2<T, U> {
         }
         #[cfg(all(feature = "hierarchical_neighbors", not(feature = "simple_neighbors")))]
         {
-            for entity in entities.iter().skip(bomb_count).copied() {
-                let count = find_neighbors(entity, &query_neighbors_2, &query_neighbor_of)
+            for (entity, coords) in entities.iter().skip(bomb_count).copied() {
+                let count = find_neighbors(entity, coords, &query_neighbors_2, &query_neighbor_of)
                     .iter()
                     .filter(|&e| bomb_entities.contains(e))
                     .count() as u8;
@@ -290,10 +315,10 @@ impl<T, U> BoardPluginV2<T, U> {
             let elapsed = start.elapsed();
             println!("hierarchical_neighbors took {:?}", elapsed);
         }
-        #[cfg(all(feature = "hierarchical_neighbors", not(feature = "simple_neighbors")))]
+        #[cfg(not(feature = "simple_neighbors"))]
         if options.safe_start {
             if let Some(entity) = safe_start {
-                let (_, children) = query.get(entity).unwrap();
+                let (_, _, children) = query.get(entity).unwrap();
                 for &child in children {
                     if cover_query.get(child).is_ok() {
                         commands.entity(child).insert(Uncover);
@@ -378,7 +403,7 @@ impl<T, U> BoardPluginV2<T, U> {
             Transform::from_xyz(0., 0., 1.),
         )
     }
-
+    #[cfg(any(feature = "simple_neighbors", feature = "hierarchical_neighbors"))]
     fn assign_neighbors(
         coords_map: &HashMap<Coordinates, Entity>,
         commands: &mut Commands,
@@ -490,22 +515,21 @@ impl<T, U> BoardPluginV2<T, U> {
 
     #[cfg(all(feature = "simple_neighbors", feature = "hierarchical_neighbors"))]
     fn check_neighbors(
-        query_neighbors: Query<(Entity, &Neighbors)>,
+        query_neighbors: Query<(Entity, &Coordinates, &Neighbors)>,
         query_neighbors_2: Query<(&Center, &GridMap)>,
-        query_neighbor_of: Query<(&GridChildOf, &Coordinates)>,
+        query_neighbor_of: Query<&GridChildOf>,
         query_coordinates: Query<&Coordinates>,
     ) {
-        for (entity, neighbors) in query_neighbors {
+        for (entity, &coords, neighbors) in query_neighbors {
             let neighbors: HashSet<Entity> = neighbors.iter().flatten().copied().collect();
             let neighbors_2: HashSet<Entity> =
-                find_neighbors(entity, &query_neighbors_2, &query_neighbor_of)
+                find_neighbors(entity, coords, &query_neighbors_2, &query_neighbor_of)
                     .into_iter()
                     .collect();
 
             if neighbors != neighbors_2 {
-                if let Ok(coords) = query_coordinates.get(entity) {
-                    println!("--{}--", coords);
-                }
+                println!("--{}--", coords);
+
                 let all_neighbors: HashSet<Entity> =
                     neighbors.union(&neighbors_2).copied().collect();
 
@@ -527,8 +551,9 @@ impl<T, U> BoardPluginV2<T, U> {
 #[cfg(feature = "hierarchical_neighbors")]
 pub fn find_neighbors(
     entity: Entity,
+    coords: Coordinates,
     query_neighbors: &Query<(&Center, &GridMap)>,
-    query_neighbor_of: &Query<(&GridChildOf, &Coordinates)>,
+    query_neighbor_of: &Query<&GridChildOf>,
 ) -> Vec<Entity> {
     if let Ok((_, grid_map)) = query_neighbors.get(entity) {
         return grid_map
@@ -537,7 +562,7 @@ pub fn find_neighbors(
             .collect();
     }
 
-    if let Ok((child_of, &coords)) = query_neighbor_of.get(entity) {
+    if let Ok(child_of) = query_neighbor_of.get(entity) {
         let center_entity = child_of.0;
         let area = IRect::from_center_size(coords.into(), IVec2::splat(3));
 
@@ -568,7 +593,7 @@ fn find_intersecting(
     visited: &mut HashSet<Entity>,
     found: &mut Vec<Entity>,
     query_neighbors: &Query<(&Center, &GridMap)>,
-    query_neighbor_of: &Query<(&GridChildOf, &Coordinates)>,
+    query_neighbor_of: &Query<&GridChildOf>,
 ) {
     if !visited.insert(center_entity) {
         return;
@@ -629,7 +654,7 @@ fn find_intersecting(
     }
 
     if found.len() < 8 {
-        if let Ok((child_of, _)) = query_neighbor_of.get(center_entity) {
+        if let Ok(child_of) = query_neighbor_of.get(center_entity) {
             find_intersecting(
                 area,
                 child_of.0,
@@ -644,7 +669,7 @@ fn find_intersecting(
 }
 
 /// Delta coordinates for all 8 square neighbors
-const SQUARE_COORDINATES: [IVec2; 8] = [
+pub const SQUARE_COORDINATES: [IVec2; 8] = [
     // Bottom left
     IVec2::new(-1, -1),
     // Bottom
