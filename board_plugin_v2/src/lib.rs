@@ -555,34 +555,27 @@ pub fn find_neighbors(
     query_neighbors: &Query<(&Center, &GridMap)>,
     query_neighbor_of: &Query<&GridChildOf>,
 ) -> Vec<Entity> {
-    if let Ok((_, grid_map)) = query_neighbors.get(entity) {
-        return grid_map
-            .iter()
-            .filter_map(|&(e, _)| (e != entity).then_some(e))
-            .collect();
-    }
+    let Ok(child_of) = query_neighbor_of.get(entity) else {
+        return vec![];
+    };
 
-    if let Ok(child_of) = query_neighbor_of.get(entity) {
-        let center_entity = child_of.0;
-        let area = IRect::from_center_size(coords.into(), IVec2::splat(3));
+    let center_entity = child_of.0;
+    let area = IRect::from_center_size(coords.into(), IVec2::splat(3));
 
-        let mut visited = HashSet::new();
-        let mut found = Vec::new();
+    let mut visited = HashSet::new();
+    let mut found = Vec::new();
 
-        find_intersecting(
-            area,
-            center_entity,
-            entity,
-            &mut visited,
-            &mut found,
-            query_neighbors,
-            query_neighbor_of,
-        );
+    find_intersecting(
+        area,
+        center_entity,
+        entity,
+        &mut visited,
+        &mut found,
+        query_neighbors,
+        query_neighbor_of,
+    );
 
-        return found;
-    }
-
-    vec![]
+    found
 }
 
 #[cfg(feature = "hierarchical_neighbors")]
