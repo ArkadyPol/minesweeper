@@ -562,7 +562,7 @@ pub fn find_neighbors(
     let center_entity = child_of.0;
     let area = IRect::from_center_size(coords.into(), IVec2::splat(3));
 
-    let mut visited = HashSet::new();
+    let mut visited = Vec::new();
     let mut found = Vec::new();
 
     find_intersecting(
@@ -583,14 +583,16 @@ fn find_intersecting(
     area: IRect,
     center_entity: Entity,
     source_entity: Entity,
-    visited: &mut HashSet<Entity>,
+    visited: &mut Vec<Entity>,
     found: &mut Vec<Entity>,
     query_neighbors: &Query<(&Center, &GridMap)>,
     query_neighbor_of: &Query<&GridChildOf>,
 ) {
-    if !visited.insert(center_entity) {
+    if visited.contains(&center_entity) {
         return;
     }
+    visited.push(center_entity);
+
     let Ok((level, grid_map)) = query_neighbors.get(center_entity) else {
         return;
     };
