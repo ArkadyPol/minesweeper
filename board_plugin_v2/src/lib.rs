@@ -563,7 +563,7 @@ pub fn find_neighbors(
     let area = IRect::from_center_size(coords.into(), IVec2::splat(3));
 
     let mut visited = Vec::new();
-    let mut found = Vec::new();
+    let mut found = Vec::with_capacity(8);
 
     find_intersecting(
         area,
