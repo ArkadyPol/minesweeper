@@ -13,6 +13,8 @@ use bevy::{
     window::PrimaryWindow,
 };
 use rand::{rng, seq::SliceRandom};
+#[cfg(feature = "hierarchical_neighbors")]
+use smallvec::{SmallVec, smallvec};
 
 use components::{Bomb, BombNeighbor, Coordinates, EndMessage, TileCover, Uncover};
 use events::{RestartGameEvent, TileMarkEvent};
@@ -447,7 +449,7 @@ impl<T, U> BoardPluginV2<T, U> {
                         centers.push(center_entity);
                         new_map.insert(center_coords, center_entity);
 
-                        let mut grid_map = Vec::new();
+                        let mut grid_map = SmallVec::new();
 
                         if let Some(&entity) = temp.get(&center_coords) {
                             commands.entity(entity).insert(GridChildOf(center_entity));
@@ -554,16 +556,16 @@ pub fn find_neighbors(
     coords: Coordinates,
     query_neighbors: &Query<(&Center, &GridMap)>,
     query_neighbor_of: &Query<&GridChildOf>,
-) -> Vec<Entity> {
+) -> SmallVec<[Entity; 8]> {
     let Ok(child_of) = query_neighbor_of.get(entity) else {
-        return vec![];
+        return smallvec![];
     };
 
     let center_entity = child_of.0;
     let area = IRect::from_center_size(coords.into(), IVec2::splat(3));
 
     let mut visited = Vec::new();
-    let mut found = Vec::with_capacity(8);
+    let mut found = SmallVec::new();
 
     find_intersecting(
         area,
@@ -584,7 +586,7 @@ fn find_intersecting(
     center_entity: Entity,
     source_entity: Entity,
     visited: &mut Vec<Entity>,
-    found: &mut Vec<Entity>,
+    found: &mut SmallVec<[Entity; 8]>,
     query_neighbors: &Query<(&Center, &GridMap)>,
     query_neighbor_of: &Query<&GridChildOf>,
 ) {
@@ -598,7 +600,7 @@ fn find_intersecting(
     };
 
     if **level == 1 {
-        for (child_entity, coords) in grid_map.iter().copied() {
+        for (child_entity, coords) in grid_map.0.iter().copied() {
             if child_entity == source_entity {
                 continue;
             }

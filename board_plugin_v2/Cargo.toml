@@ -7,7 +7,7 @@ edition = "2024"
 default = []
 debug = ["colored", "bevy-inspector-egui"]
 simple_neighbors = []
-hierarchical_neighbors = []
+hierarchical_neighbors = ["smallvec"]
 
 [dependencies]
 settings_plugin = { path = "../settings_plugin"}
@@ -16,6 +16,9 @@ bevy = { workspace = true }
 
 # Random
 rand = "0.9.2"
+
+# Small Vec
+smallvec = { version = "1.15.1", optional = true}
 
 # Console Debug
 colored = { version = "3.0.0", optional = true }

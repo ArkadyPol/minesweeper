@@ -4,6 +4,8 @@ use bevy::prelude::*;
 use bevy::prelude::ReflectComponent;
 #[cfg(feature = "debug")]
 use bevy_inspector_egui::prelude::ReflectInspectorOptions;
+#[cfg(feature = "hierarchical_neighbors")]
+use smallvec::SmallVec;
 
 use crate::components::Coordinates;
 
@@ -12,6 +14,7 @@ use crate::components::Coordinates;
     derive(bevy_inspector_egui::InspectorOptions, bevy::reflect::Reflect),
     reflect(Component, InspectorOptions)
 )]
+#[cfg(feature = "hierarchical_neighbors")]
 #[derive(Component)]
 #[relationship(relationship_target = GridChildren)]
 pub struct GridChildOf(pub Entity);
@@ -21,9 +24,10 @@ pub struct GridChildOf(pub Entity);
     derive(bevy_inspector_egui::InspectorOptions, bevy::reflect::Reflect),
     reflect(Component, InspectorOptions)
 )]
+#[cfg(feature = "hierarchical_neighbors")]
 #[derive(Component, Deref)]
 #[relationship_target(relationship = GridChildOf)]
-pub struct GridChildren(Vec<Entity>);
+pub struct GridChildren(SmallVec<[Entity; 9]>);
 
 #[cfg_attr(
     feature = "debug",
@@ -44,5 +48,6 @@ impl Center {
     derive(bevy_inspector_egui::InspectorOptions, bevy::reflect::Reflect),
     reflect(Component, InspectorOptions)
 )]
+#[cfg(feature = "hierarchical_neighbors")]
 #[derive(Component, Deref)]
-pub struct GridMap(pub Vec<(Entity, Coordinates)>);
+pub struct GridMap(pub SmallVec<[(Entity, Coordinates); 9]>);
