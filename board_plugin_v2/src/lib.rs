@@ -177,6 +177,7 @@ impl<T, U> BoardPluginV2<T, U> {
             &GridChildren2,
             &Coordinates,
             &Center,
+            &GridMap,
         )>,
         #[cfg(feature = "hierarchical_neighbors")] query_neighbor_of: Query<&GridChildOf>,
     ) {
@@ -528,7 +529,7 @@ impl<T, U> BoardPluginV2<T, U> {
     #[cfg(all(feature = "simple_neighbors", feature = "hierarchical_neighbors"))]
     fn check_neighbors(
         query_neighbors: Query<(Entity, &Coordinates, &Neighbors)>,
-        query_neighbors_2: Query<(&GridChildren2, &Coordinates, &Center)>,
+        query_neighbors_2: Query<(&GridChildren2, &Coordinates, &Center, &GridMap)>,
         query_neighbor_of: Query<&GridChildOf>,
         query_coordinates: Query<&Coordinates>,
     ) {
@@ -564,14 +565,14 @@ impl<T, U> BoardPluginV2<T, U> {
 pub fn find_neighbors(
     entity: Entity,
     coords: Coordinates,
-    query_neighbors: &Query<(&GridChildren2, &Coordinates, &Center)>,
+    query_neighbors: &Query<(&GridChildren2, &Coordinates, &Center, &GridMap)>,
     query_neighbor_of: &Query<&GridChildOf>,
 ) -> SmallVec<[Entity; 8]> {
     let Ok(child_of) = query_neighbor_of.get(entity) else {
         return smallvec![];
     };
     let center_entity = child_of.0;
-    let Ok((children, &center_coords, _)) = query_neighbors.get(center_entity) else {
+    let Ok((children, &center_coords, _, _)) = query_neighbors.get(center_entity) else {
         return smallvec![];
     };
 
@@ -600,7 +601,7 @@ pub fn find_neighbors(
         return found;
     };
     let center_entity = child_of.0;
-    let Ok((children, &n_coords, _)) = query_neighbors.get(center_entity) else {
+    let Ok((_, &n_coords, _, grid_map)) = query_neighbors.get(center_entity) else {
         return found;
     };
 
@@ -638,18 +639,15 @@ pub fn find_neighbors(
         let center_coords = center_coords + tuple;
 
         if bounds.contains((center_coords).into()) {
-            for &child_entity in children.iter().flatten() {
-                if let Ok((children, &coords, _)) = query_neighbors.get(child_entity) {
-                    if coords == center_coords {
+            for (child_entity, coords) in grid_map.iter().copied() {
+                if coords == center_coords {
+                    if let Ok((children, _, _, _)) = query_neighbors.get(child_entity) {
                         add_neighbors(&mut found, children, &indexes);
                         break;
                     }
                 }
             }
-        } else {
-            let Ok(child_of) = query_neighbor_of.get(center_entity) else {
-                return found;
-            };
+        } else if let Ok(child_of) = query_neighbor_of.get(center_entity) {
             found.extend(find_coordinates(
                 center_coords,
                 &indexes,
@@ -755,29 +753,37 @@ fn find_coordinates(
     indexes: &[usize],
     center_entity: Entity,
     source_entity: Entity,
-    query_neighbors: &Query<(&GridChildren2, &Coordinates, &Center)>,
+    query_neighbors: &Query<(&GridChildren2, &Coordinates, &Center, &GridMap)>,
     query_neighbor_of: &Query<&GridChildOf>,
 ) -> SmallVec<[Entity; 8]> {
-    let Ok((children, &coords, level)) = query_neighbors.get(center_entity) else {
+    let Ok((_, _, level, grid_map)) = query_neighbors.get(center_entity) else {
         return smallvec![];
     };
 
-    if **level == 1 && coords == center_coords {
-        let mut result = SmallVec::new();
-        for &i in indexes {
-            if let Some(Some(e)) = children.get(i) {
-                result.push(*e);
+    if **level == 2 {
+        for (child_entity, n_coords) in grid_map.iter().copied() {
+            if n_coords != center_coords {
+                continue;
+            }
+
+            if let Ok((children, _, _, _)) = query_neighbors.get(child_entity) {
+                let mut result = SmallVec::new();
+                for &i in indexes {
+                    if let Some(Some(e)) = children.get(i) {
+                        result.push(*e);
+                    }
+                }
+                return result;
             }
         }
-        return result;
     }
 
-    for &child_entity in children.iter().flatten() {
+    for (child_entity, n_coords) in grid_map.iter().copied() {
         if child_entity == source_entity {
             continue;
         }
 
-        if let Ok((_, &n_coords, level)) = query_neighbors.get(child_entity) {
+        if let Ok((_, _, level, _)) = query_neighbors.get(child_entity) {
             let bounds = IRect::from_center_size(n_coords.into(), level.get_size());
             if bounds.contains(center_coords.into()) {
                 return find_coordinates(
