@@ -33,7 +33,7 @@ use systems::{
 use components::Neighbors;
 
 #[cfg(feature = "hierarchical_neighbors")]
-use components::{Center, GridChildOf, GridMap};
+use components::{Center, GridChildOf, GridChildren2, GridMap};
 
 pub struct BoardPluginV2<T, U> {
     pub running_state: T,
@@ -173,7 +173,11 @@ impl<T, U> BoardPluginV2<T, U> {
         board_options: Option<Res<BoardOptions>>,
         board_assets: Res<BoardAssets>,
         board: Res<Board>,
-        #[cfg(feature = "hierarchical_neighbors")] query_neighbors_2: Query<(&Center, &GridMap)>,
+        #[cfg(feature = "hierarchical_neighbors")] query_neighbors_2: Query<(
+            &GridChildren2,
+            &Coordinates,
+            &Center,
+        )>,
         #[cfg(feature = "hierarchical_neighbors")] query_neighbor_of: Query<&GridChildOf>,
     ) {
         let mut rng = rng();
@@ -450,23 +454,29 @@ impl<T, U> BoardPluginV2<T, U> {
                         new_map.insert(center_coords, center_entity);
 
                         let mut grid_map = SmallVec::new();
+                        let mut grid_children_2 = [None; 9];
 
                         if let Some(&entity) = temp.get(&center_coords) {
                             commands.entity(entity).insert(GridChildOf(center_entity));
                             grid_map.push((entity, center_coords));
+                            grid_children_2[0] = Some(entity);
                         }
 
                         let neighbors = SQUARE_COORDINATES
                             .map(|tuple| center_coords + tuple * divisor as i32 / 3);
 
-                        for coords in neighbors {
+                        for (i, coords) in neighbors.into_iter().enumerate() {
                             if let Some(&entity) = temp.get(&coords) {
                                 commands.entity(entity).insert(GridChildOf(center_entity));
                                 grid_map.push((entity, coords));
+                                grid_children_2[i + 1] = Some(entity);
                             }
                         }
 
                         commands.entity(center_entity).insert(GridMap(grid_map));
+                        commands
+                            .entity(center_entity)
+                            .insert(GridChildren2(grid_children_2));
                     }
                 }
 
@@ -518,7 +528,7 @@ impl<T, U> BoardPluginV2<T, U> {
     #[cfg(all(feature = "simple_neighbors", feature = "hierarchical_neighbors"))]
     fn check_neighbors(
         query_neighbors: Query<(Entity, &Coordinates, &Neighbors)>,
-        query_neighbors_2: Query<(&Center, &GridMap)>,
+        query_neighbors_2: Query<(&GridChildren2, &Coordinates, &Center)>,
         query_neighbor_of: Query<&GridChildOf>,
         query_coordinates: Query<&Coordinates>,
     ) {
@@ -554,28 +564,102 @@ impl<T, U> BoardPluginV2<T, U> {
 pub fn find_neighbors(
     entity: Entity,
     coords: Coordinates,
-    query_neighbors: &Query<(&Center, &GridMap)>,
+    query_neighbors: &Query<(&GridChildren2, &Coordinates, &Center)>,
     query_neighbor_of: &Query<&GridChildOf>,
 ) -> SmallVec<[Entity; 8]> {
     let Ok(child_of) = query_neighbor_of.get(entity) else {
         return smallvec![];
     };
-
     let center_entity = child_of.0;
-    let area = IRect::from_center_size(coords.into(), IVec2::splat(3));
+    let Ok((children, &center_coords, _)) = query_neighbors.get(center_entity) else {
+        return smallvec![];
+    };
 
-    let mut visited = Vec::new();
+    let offset = coords - center_coords;
+
     let mut found = SmallVec::new();
 
-    find_intersecting(
-        area,
-        center_entity,
-        entity,
-        &mut visited,
-        &mut found,
-        query_neighbors,
-        query_neighbor_of,
-    );
+    match (offset.x, offset.y) {
+        (0, 0) => {
+            add_neighbors(&mut found, children, &[1, 2, 3, 4, 5, 6, 7, 8]);
+            return found;
+        }
+        (-1, 0) => add_neighbors(&mut found, children, &[0, 1, 2, 6, 7]),
+        (1, 0) => add_neighbors(&mut found, children, &[0, 2, 3, 7, 8]),
+        (0, -1) => add_neighbors(&mut found, children, &[0, 1, 3, 4, 5]),
+        (0, 1) => add_neighbors(&mut found, children, &[0, 4, 5, 6, 8]),
+        (-1, -1) => add_neighbors(&mut found, children, &[0, 2, 4]),
+        (1, -1) => add_neighbors(&mut found, children, &[0, 2, 5]),
+        (-1, 1) => add_neighbors(&mut found, children, &[0, 4, 7]),
+        (1, 1) => add_neighbors(&mut found, children, &[0, 5, 7]),
+        _ => {}
+    };
+
+    // 2 level
+    let Ok(child_of) = query_neighbor_of.get(center_entity) else {
+        return found;
+    };
+    let center_entity = child_of.0;
+    let Ok((children, &n_coords, _)) = query_neighbors.get(center_entity) else {
+        return found;
+    };
+
+    let index_map: SmallVec<[((i8, i8), SmallVec<[usize; 3]>); 3]> = match (offset.x, offset.y) {
+        (-1, 0) => smallvec![((-3, 0), smallvec![3, 5, 8])],
+        (1, 0) => smallvec![((3, 0), smallvec![1, 4, 6])],
+        (0, -1) => smallvec![((0, -3), smallvec![6, 7, 8])],
+        (0, 1) => smallvec![((0, 3), smallvec![1, 2, 3])],
+        (-1, -1) => smallvec![
+            ((-3, 0), smallvec![3, 5]),
+            ((0, -3), smallvec![6, 7]),
+            ((-3, -3), smallvec![8]),
+        ],
+        (1, -1) => smallvec![
+            ((3, 0), smallvec![1, 4]),
+            ((0, -3), smallvec![7, 8]),
+            ((3, -3), smallvec![6]),
+        ],
+        (-1, 1) => smallvec![
+            ((-3, 0), smallvec![5, 8]),
+            ((0, 3), smallvec![1, 2]),
+            ((-3, 3), smallvec![3]),
+        ],
+        (1, 1) => smallvec![
+            ((3, 0), smallvec![4, 6]),
+            ((0, 3), smallvec![2, 3]),
+            ((3, 3), smallvec![1]),
+        ],
+        _ => smallvec![],
+    };
+
+    let bounds = IRect::from_center_size(n_coords.into(), IVec2::splat(9));
+
+    for (tuple, indexes) in index_map {
+        let center_coords = center_coords + tuple;
+
+        if bounds.contains((center_coords).into()) {
+            for &child_entity in children.iter().flatten() {
+                if let Ok((children, &coords, _)) = query_neighbors.get(child_entity) {
+                    if coords == center_coords {
+                        add_neighbors(&mut found, children, &indexes);
+                        break;
+                    }
+                }
+            }
+        } else {
+            let Ok(child_of) = query_neighbor_of.get(center_entity) else {
+                return found;
+            };
+            found.extend(find_coordinates(
+                center_coords,
+                &indexes,
+                child_of.0,
+                center_entity,
+                &query_neighbors,
+                &query_neighbor_of,
+            ));
+        }
+    }
 
     found
 }
@@ -600,7 +684,7 @@ fn find_intersecting(
     };
 
     if **level == 1 {
-        for (child_entity, coords) in grid_map.0.iter().copied() {
+        for (child_entity, coords) in grid_map.iter().copied() {
             if child_entity == source_entity {
                 continue;
             }
@@ -665,6 +749,63 @@ fn find_intersecting(
     }
 }
 
+#[cfg(feature = "hierarchical_neighbors")]
+fn find_coordinates(
+    center_coords: Coordinates,
+    indexes: &[usize],
+    center_entity: Entity,
+    source_entity: Entity,
+    query_neighbors: &Query<(&GridChildren2, &Coordinates, &Center)>,
+    query_neighbor_of: &Query<&GridChildOf>,
+) -> SmallVec<[Entity; 8]> {
+    let Ok((children, &coords, level)) = query_neighbors.get(center_entity) else {
+        return smallvec![];
+    };
+
+    if **level == 1 && coords == center_coords {
+        let mut result = SmallVec::new();
+        for &i in indexes {
+            if let Some(Some(e)) = children.get(i) {
+                result.push(*e);
+            }
+        }
+        return result;
+    }
+
+    for &child_entity in children.iter().flatten() {
+        if child_entity == source_entity {
+            continue;
+        }
+
+        if let Ok((_, &n_coords, level)) = query_neighbors.get(child_entity) {
+            let bounds = IRect::from_center_size(n_coords.into(), level.get_size());
+            if bounds.contains(center_coords.into()) {
+                return find_coordinates(
+                    center_coords,
+                    indexes,
+                    child_entity,
+                    source_entity,
+                    query_neighbors,
+                    query_neighbor_of,
+                );
+            }
+        }
+    }
+
+    if let Ok(child_of) = query_neighbor_of.get(center_entity) {
+        return find_coordinates(
+            center_coords,
+            indexes,
+            child_of.0,
+            center_entity,
+            query_neighbors,
+            query_neighbor_of,
+        );
+    }
+
+    smallvec![]
+}
+
 /// Delta coordinates for all 8 square neighbors
 pub const SQUARE_COORDINATES: [IVec2; 8] = [
     // Bottom left
@@ -687,4 +828,13 @@ pub const SQUARE_COORDINATES: [IVec2; 8] = [
 
 fn intersects(a: IRect, b: IRect) -> bool {
     !(a.max.x < b.min.x || b.max.x < a.min.x || a.max.y < b.min.y || b.max.y < a.min.y)
+}
+
+#[inline]
+fn add_neighbors(found: &mut SmallVec<[Entity; 8]>, children: &GridChildren2, indexes: &[usize]) {
+    for &i in indexes {
+        if let Some(Some(e)) = children.get(i) {
+            found.push(*e);
+        }
+    }
 }

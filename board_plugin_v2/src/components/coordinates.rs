@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use std::fmt::{self, Display, Formatter};
-use std::ops::Add;
+use std::ops::{Add, Sub};
 
 #[cfg(feature = "debug")]
 use bevy::prelude::ReflectComponent;
@@ -34,6 +34,16 @@ impl Add<IVec2> for Coordinates {
         let x = ((self.x as i16) + x as i16) as u16;
         let y = ((self.y as i16) + y as i16) as u16;
         Self { x, y }
+    }
+}
+
+impl Sub for Coordinates {
+    type Output = IVec2;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        let x = self.x as i32 - rhs.x as i32;
+        let y = self.y as i32 - rhs.y as i32;
+        Self::Output { x, y }
     }
 }
 

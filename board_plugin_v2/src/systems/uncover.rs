@@ -1,16 +1,14 @@
 use bevy::{log, prelude::*};
 
-#[cfg(not(feature = "simple_neighbors"))]
-use crate::components::Coordinates;
 #[cfg(feature = "simple_neighbors")]
 use crate::components::Neighbors;
 #[cfg(feature = "hierarchical_neighbors")]
-use crate::components::{Center, GridChildOf, GridMap};
+use crate::components::{Center, GridChildOf, GridChildren2};
 #[cfg(all(feature = "hierarchical_neighbors", not(feature = "simple_neighbors")))]
 use crate::find_neighbors;
 use crate::{
     BoardOptions,
-    components::{Bomb, BombNeighbor, TileCover, Uncover},
+    components::{Bomb, BombNeighbor, Coordinates, TileCover, Uncover},
     events::{BoardCompletedEvent, BombExplosionEvent, PropagateUncoverEvent, TileTriggerEvent},
 };
 #[cfg(not(any(feature = "simple_neighbors", feature = "hierarchical_neighbors")))]
@@ -39,7 +37,11 @@ pub fn uncover_tiles(
     )>,
     cover_query: Query<(), (With<TileCover>, Without<Uncover>)>,
     board_options: Option<Res<BoardOptions>>,
-    #[cfg(feature = "hierarchical_neighbors")] query_neighbors_2: Query<(&Center, &GridMap)>,
+    #[cfg(feature = "hierarchical_neighbors")] query_neighbors_2: Query<(
+        &GridChildren2,
+        &Coordinates,
+        &Center,
+    )>,
     #[cfg(feature = "hierarchical_neighbors")] query_neighbor_of: Query<&GridChildOf>,
 ) {
     let options = match board_options {
