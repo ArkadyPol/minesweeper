@@ -640,14 +640,14 @@ pub fn find_neighbors(
                 }
             }
         } else if let Ok(child_of) = query_neighbor_of.get(center_entity) {
-            found.extend(find_coordinates(
+            find_coordinates(
+                &mut found,
                 coords_l1,
                 &indexes,
                 child_of.0,
-                center_entity,
                 &query_neighbors,
                 &query_neighbor_of,
-            ));
+            );
         }
     }
 
@@ -741,59 +741,56 @@ fn find_intersecting(
 
 #[cfg(feature = "hierarchical_neighbors")]
 fn find_coordinates(
+    found: &mut SmallVec<[Entity; 8]>,
     coords_l1: Coordinates,
     indexes: &[usize],
     center_entity: Entity,
-    source_entity: Entity,
     query_neighbors: &Query<(&Coordinates, &Center, &GridMap)>,
     query_neighbor_of: &Query<&GridChildOf>,
-) -> SmallVec<[Entity; 8]> {
-    let Ok((&coords_ln, level, grid_map)) = query_neighbors.get(center_entity) else {
-        return smallvec![];
+) {
+    let Ok((_, level, grid_map)) = query_neighbors.get(center_entity) else {
+        return;
     };
 
-    if **level == 2 {
-        if let Some(i) = offset_to_index(coords_l1 - coords_ln) {
-            if let Some((child_entity, _)) = grid_map[i] {
-                if let Ok((_, _, grid_map)) = query_neighbors.get(child_entity) {
-                    let mut result = SmallVec::new();
-                    add_neighbors(&mut result, grid_map, indexes);
-                    return result;
-                }
-            }
-        }
-    }
-
+    // 3 level or higher
     for (child_entity, coords_ln) in grid_map.iter().flatten().copied() {
-        if child_entity == source_entity {
-            continue;
-        }
-
         let bounds = IRect::from_center_size(coords_ln.into(), get_size(**level - 1));
         if bounds.contains(coords_l1.into()) {
-            return find_coordinates(
-                coords_l1,
-                indexes,
-                child_entity,
-                source_entity,
-                query_neighbors,
-                query_neighbor_of,
-            );
+            if **level == 3 {
+                if let Ok((_, _, grid_map)) = query_neighbors.get(child_entity) {
+                    if let Some(i) = offset_to_index(coords_l1 - coords_ln) {
+                        if let Some((child_entity, _)) = grid_map[i] {
+                            if let Ok((_, _, grid_map)) = query_neighbors.get(child_entity) {
+                                add_neighbors(found, grid_map, indexes);
+                            }
+                        }
+                    }
+                }
+            } else {
+                find_coordinates(
+                    found,
+                    coords_l1,
+                    indexes,
+                    child_entity,
+                    query_neighbors,
+                    query_neighbor_of,
+                );
+            }
+
+            return;
         }
     }
 
     if let Ok(child_of) = query_neighbor_of.get(center_entity) {
-        return find_coordinates(
+        find_coordinates(
+            found,
             coords_l1,
             indexes,
             child_of.0,
-            center_entity,
             query_neighbors,
             query_neighbor_of,
         );
     }
-
-    smallvec![]
 }
 
 /// Delta coordinates for all 8 square neighbors
@@ -821,6 +818,7 @@ fn intersects(a: IRect, b: IRect) -> bool {
 }
 
 #[inline]
+#[cfg(feature = "hierarchical_neighbors")]
 fn add_neighbors(found: &mut SmallVec<[Entity; 8]>, grid_map: &GridMap, indexes: &[usize]) {
     for &i in indexes {
         if let Some((e, _)) = grid_map[i] {
