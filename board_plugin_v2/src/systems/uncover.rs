@@ -3,7 +3,7 @@ use bevy::{log, prelude::*};
 #[cfg(feature = "simple_neighbors")]
 use crate::components::Neighbors;
 #[cfg(feature = "hierarchical_neighbors")]
-use crate::components::{Center, GridChildOf, GridChildren2, GridMap};
+use crate::components::{Center, GridChildOf, GridMap};
 #[cfg(all(feature = "hierarchical_neighbors", not(feature = "simple_neighbors")))]
 use crate::find_neighbors;
 use crate::{
@@ -38,7 +38,6 @@ pub fn uncover_tiles(
     cover_query: Query<(), (With<TileCover>, Without<Uncover>)>,
     board_options: Option<Res<BoardOptions>>,
     #[cfg(feature = "hierarchical_neighbors")] query_neighbors_2: Query<(
-        &GridChildren2,
         &Coordinates,
         &Center,
         &GridMap,

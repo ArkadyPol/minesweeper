@@ -35,7 +35,7 @@ pub struct GridChildren(SmallVec<[Entity; 9]>);
     reflect(Component, InspectorOptions)
 )]
 #[derive(Component, Deref)]
-pub struct GridChildren2(pub [Option<Entity>; 9]);
+pub struct GridMap(pub [Option<(Entity, Coordinates)>; 9]);
 
 #[cfg_attr(
     feature = "debug",
@@ -50,12 +50,3 @@ impl Center {
         IVec2::splat(3_i32.pow(**self as u32))
     }
 }
-
-#[cfg_attr(
-    feature = "debug",
-    derive(bevy_inspector_egui::InspectorOptions, bevy::reflect::Reflect),
-    reflect(Component, InspectorOptions)
-)]
-#[cfg(feature = "hierarchical_neighbors")]
-#[derive(Component, Deref)]
-pub struct GridMap(pub SmallVec<[(Entity, Coordinates); 9]>);
