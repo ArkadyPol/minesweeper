@@ -44,9 +44,3 @@ pub struct GridMap(pub [Option<(Entity, Coordinates)>; 9]);
 )]
 #[derive(Component, Deref)]
 pub struct Center(pub u8);
-
-impl Center {
-    pub fn get_size(&self) -> IVec2 {
-        IVec2::splat(3_i32.pow(**self as u32))
-    }
-}

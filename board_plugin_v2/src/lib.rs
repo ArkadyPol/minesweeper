@@ -691,7 +691,7 @@ fn find_intersecting(
                 continue;
             }
             if let Ok((level, grid_map)) = query_neighbors.get(child_entity) {
-                let bounds = IRect::from_center_size(coords.into(), level.get_size());
+                let bounds = IRect::from_center_size(coords.into(), get_size(**level));
 
                 if intersects(bounds, area) {
                     for (child_entity, coords) in grid_map.iter().flatten().copied() {
@@ -707,7 +707,7 @@ fn find_intersecting(
     if **level > 2 {
         for (child_entity, coords) in grid_map.iter().flatten().copied() {
             if let Ok((level, _)) = query_neighbors.get(child_entity) {
-                let bounds = IRect::from_center_size(coords.into(), level.get_size());
+                let bounds = IRect::from_center_size(coords.into(), get_size(**level));
 
                 if intersects(bounds, area) {
                     find_intersecting(
@@ -769,18 +769,16 @@ fn find_coordinates(
             continue;
         }
 
-        if let Ok((_, level, _)) = query_neighbors.get(child_entity) {
-            let bounds = IRect::from_center_size(coords_ln.into(), level.get_size());
-            if bounds.contains(coords_l1.into()) {
-                return find_coordinates(
-                    coords_l1,
-                    indexes,
-                    child_entity,
-                    source_entity,
-                    query_neighbors,
-                    query_neighbor_of,
-                );
-            }
+        let bounds = IRect::from_center_size(coords_ln.into(), get_size(**level - 1));
+        if bounds.contains(coords_l1.into()) {
+            return find_coordinates(
+                coords_l1,
+                indexes,
+                child_entity,
+                source_entity,
+                query_neighbors,
+                query_neighbor_of,
+            );
         }
     }
 
@@ -845,4 +843,8 @@ fn offset_to_index(offset: IVec2) -> Option<usize> {
         (3, 3) => Some(8),
         _ => None,
     }
+}
+#[inline]
+fn get_size(level: u8) -> IVec2 {
+    IVec2::splat(3_i32.pow(level as u32))
 }
