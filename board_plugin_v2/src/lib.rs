@@ -174,9 +174,8 @@ impl<T, U> BoardPluginV2<T, U> {
         board_assets: Res<BoardAssets>,
         board: Res<Board>,
         #[cfg(feature = "hierarchical_neighbors")] query_neighbors_2: Query<(
-            &Coordinates,
-            &Center,
             &GridMap,
+            &Coordinates,
         )>,
         #[cfg(feature = "hierarchical_neighbors")] query_neighbor_of: Query<&GridChildOf>,
     ) {
@@ -522,7 +521,7 @@ impl<T, U> BoardPluginV2<T, U> {
     #[cfg(all(feature = "simple_neighbors", feature = "hierarchical_neighbors"))]
     fn check_neighbors(
         query_neighbors: Query<(Entity, &Coordinates, &Neighbors)>,
-        query_neighbors_2: Query<(&Coordinates, &Center, &GridMap)>,
+        query_neighbors_2: Query<(&GridMap, &Coordinates)>,
         query_neighbor_of: Query<&GridChildOf>,
         query_coordinates: Query<&Coordinates>,
     ) {
@@ -558,14 +557,14 @@ impl<T, U> BoardPluginV2<T, U> {
 pub fn find_neighbors(
     entity: Entity,
     coords: Coordinates,
-    query_neighbors: &Query<(&Coordinates, &Center, &GridMap)>,
+    query_neighbors: &Query<(&GridMap, &Coordinates)>,
     query_neighbor_of: &Query<&GridChildOf>,
 ) -> SmallVec<[Entity; 8]> {
     let Ok(child_of) = query_neighbor_of.get(entity) else {
         return smallvec![];
     };
     let center_entity = child_of.0;
-    let Ok((&coords_l1, _, grid_map)) = query_neighbors.get(center_entity) else {
+    let Ok((grid_map, &coords_l1)) = query_neighbors.get(center_entity) else {
         return smallvec![];
     };
 
@@ -594,7 +593,7 @@ pub fn find_neighbors(
         return found;
     };
     let center_entity = child_of.0;
-    let Ok((&coords_l2, _, grid_map)) = query_neighbors.get(center_entity) else {
+    let Ok((grid_map, &coords_l2)) = query_neighbors.get(center_entity) else {
         return found;
     };
 
@@ -634,7 +633,7 @@ pub fn find_neighbors(
         if bounds.contains((coords_l1).into()) {
             if let Some(i) = offset_to_index(coords_l1 - coords_l2) {
                 if let Some((child_entity, _)) = grid_map[i] {
-                    if let Ok((_, _, grid_map)) = query_neighbors.get(child_entity) {
+                    if let Ok((grid_map, _)) = query_neighbors.get(child_entity) {
                         add_neighbors(&mut found, grid_map, &indexes);
                     }
                 }
@@ -645,6 +644,7 @@ pub fn find_neighbors(
                 coords_l1,
                 &indexes,
                 child_of.0,
+                3,
                 &query_neighbors,
                 &query_neighbor_of,
             );
@@ -745,22 +745,23 @@ fn find_coordinates(
     coords_l1: Coordinates,
     indexes: &[usize],
     center_entity: Entity,
-    query_neighbors: &Query<(&Coordinates, &Center, &GridMap)>,
+    level: u8,
+    query_neighbors: &Query<(&GridMap, &Coordinates)>,
     query_neighbor_of: &Query<&GridChildOf>,
 ) {
-    let Ok((_, level, grid_map)) = query_neighbors.get(center_entity) else {
+    let Ok((grid_map, _)) = query_neighbors.get(center_entity) else {
         return;
     };
 
     // 3 level or higher
     for (child_entity, coords_ln) in grid_map.iter().flatten().copied() {
-        let bounds = IRect::from_center_size(coords_ln.into(), get_size(**level - 1));
+        let bounds = IRect::from_center_size(coords_ln.into(), get_size(level - 1));
         if bounds.contains(coords_l1.into()) {
-            if **level == 3 {
-                if let Ok((_, _, grid_map)) = query_neighbors.get(child_entity) {
+            if level == 3 {
+                if let Ok((grid_map, _)) = query_neighbors.get(child_entity) {
                     if let Some(i) = offset_to_index(coords_l1 - coords_ln) {
                         if let Some((child_entity, _)) = grid_map[i] {
-                            if let Ok((_, _, grid_map)) = query_neighbors.get(child_entity) {
+                            if let Ok((grid_map, _)) = query_neighbors.get(child_entity) {
                                 add_neighbors(found, grid_map, indexes);
                             }
                         }
@@ -772,6 +773,7 @@ fn find_coordinates(
                     coords_l1,
                     indexes,
                     child_entity,
+                    level - 1,
                     query_neighbors,
                     query_neighbor_of,
                 );
@@ -787,6 +789,7 @@ fn find_coordinates(
             coords_l1,
             indexes,
             child_of.0,
+            level + 1,
             query_neighbors,
             query_neighbor_of,
         );
