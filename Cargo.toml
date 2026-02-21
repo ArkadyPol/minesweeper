@@ -18,14 +18,14 @@ simple_neighbors = ["board_plugin_v2/simple_neighbors"]
 hierarchical_neighbors = ["board_plugin_v2/hierarchical_neighbors"]
 
 [dependencies]
-bevy = { version = "0.17.2", features = ["dynamic_linking", "experimental_bevy_ui_widgets"] }
+bevy = { version = "0.18.0", features = ["dynamic_linking", "experimental_bevy_ui_widgets"] }
 board_plugin = { path = "board_plugin", optional = true }
 board_plugin_v2 = { path = "board_plugin_v2", optional = true }
 main_menu_plugin = { path = "main_menu_plugin"}
 settings_plugin = { path = "settings_plugin"}
 
 # Hierarchy inspector debug
-bevy-inspector-egui = { version = "0.34.0", optional = true }
+bevy-inspector-egui = { version = "0.36.0", optional = true }
 
 [workspace]
 resolver = "2"
@@ -37,7 +37,7 @@ members = [
 ]
 
 [workspace.dependencies]
-bevy = { version = "0.17.2", features = ["dynamic_linking", "experimental_bevy_ui_widgets"] }
+bevy = { version = "0.18.0", features = ["dynamic_linking", "experimental_bevy_ui_widgets"] }
 
 # Enable optimizations for dependencies (incl. Bevy), but not for our code:
 [profile.dev.package."*"]

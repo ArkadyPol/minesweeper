@@ -1,4 +1,4 @@
-use bevy::{log, prelude::*, ui_widgets::UiWidgetsPlugins};
+use bevy::{input_focus::InputFocus, log, prelude::*, ui_widgets::UiWidgetsPlugins};
 use board_plugin_v2::events::RestartGameEvent;
 use main_menu_plugin::{MainMenuPlugin, events::LoadSettingsEvent};
 use settings_plugin::{
@@ -55,6 +55,7 @@ fn main() {
         picking_mode: SpritePickingMode::BoundingBox,
         ..default()
     });
+    app.init_resource::<InputFocus>();
     app.init_state::<AppState>();
     app.add_computed_state::<InGame>();
     #[cfg(feature = "board_v1")]

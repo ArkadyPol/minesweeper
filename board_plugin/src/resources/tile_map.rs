@@ -1,6 +1,6 @@
 use crate::components::Coordinates;
 use crate::resources::tile::Tile;
-use rand::{Rng, rng};
+use rand::{RngExt, rng};
 use std::ops::{Deref, DerefMut};
 
 /// Base tile map
